@@ -546,25 +546,25 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         let currentNextY = 0; // Tracks the next available row index for independent branches
 
         // Helper to recursively assign Y and return how much Y space this branch took
-        const assignY = (nodeId: string, startY: number): number => {
-            if (vIndexMap.has(nodeId)) return 0; // Already handled (e.g. multi-input)
+        const assignY = (nodeId: string, startY: number, targetMap: Map<string, number>, globalMap?: Map<string, number>): number => {
+            if (targetMap.has(nodeId) || (globalMap && globalMap.has(nodeId))) return 0; // Already handled (e.g. multi-input)
 
             const children = adj.get(nodeId) || [];
 
             // If we have 1 child, we can align it directly with our startY
             if (children.length <= 1) {
-                vIndexMap.set(nodeId, startY);
+                targetMap.set(nodeId, startY);
                 let heightConsumed = 1;
                 if (children.length === 1) {
                     // Dive into child, giving it our exact same startY line
-                    const childConsumed = assignY(children[0], startY);
+                    const childConsumed = assignY(children[0], startY, targetMap, globalMap);
                     heightConsumed = Math.max(1, childConsumed);
                 }
                 return heightConsumed;
             }
 
             // We have multiple children. We need to stack them.
-            vIndexMap.set(nodeId, startY);
+            targetMap.set(nodeId, startY);
             let childStartY = startY;
 
             // Sort children to preserve existing manual swapped vertical index relative ordering
@@ -572,9 +572,9 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
 
             for (const childId of sortedChildren) {
                 // If the child already has a Y (because another parent reached it first), skip
-                if (vIndexMap.has(childId)) continue;
+                if (targetMap.has(childId) || (globalMap && globalMap.has(childId))) continue;
 
-                const consumed = assignY(childId, childStartY);
+                const consumed = assignY(childId, childStartY, targetMap, globalMap);
                 childStartY += consumed; // Next child gets pushed down
             }
 
@@ -583,42 +583,63 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         };
 
         // First, assign Y positions starting from the roots.
-        // ONLY treat proper power sources as global trees that reserve full row space.
-        // Other independent elements (like floating loads or isolated parts) will be packed tightly 
-        // into empty slots in their respective columns later.
+        // Treating proper power sources as global trees that reserve full row space.
         const sourceRoots = [...roots]
             .filter(r => r.data.type === 'powerSource')
             .sort((a, b) => ((a.data as any).verticalIndex || 0) - ((b.data as any).verticalIndex || 0));
 
         sourceRoots.forEach(r => {
-            const consumed = assignY(r.id, currentNextY);
+            const consumed = assignY(r.id, currentNextY, vIndexMap);
             currentNextY += consumed;
         });
 
         // Any disconnected nodes or isolated subtrees that aren't tied to a main PowerSource
-        // Place them at the first available open slot in their specific level column, 
-        // effectively back-filling empty space.
+        // We playfully back-fill them into empty slots at the top (testY = 0, 1...)
+        // by simulating their placement (dry run) and checking for structural grid overlap.
         const disconnectedNodes = newNodes.filter(n => !vIndexMap.has(n.id))
             .sort((a, b) => ((a.data as any).verticalIndex || 0) - ((b.data as any).verticalIndex || 0));
 
         disconnectedNodes.forEach(n => {
             if (vIndexMap.has(n.id)) return; // Might be processed as a child of another disconnected node
 
-            // Find currently occupied Y slots for this node's specific level
-            const occupied = new Set<number>();
-            newNodes.forEach(other => {
-                if (other.data.level === n.data.level && vIndexMap.has(other.id)) {
-                    occupied.add(vIndexMap.get(other.id)!);
-                }
-            });
-
-            let testY = 0;
-            while (occupied.has(testY)) {
-                testY++;
+            // Build currently definitively occupied grid matrix: "level,y"
+            const occupiedGrid = new Set<string>();
+            for (const [id, y] of vIndexMap.entries()) {
+                occupiedGrid.add(`${nodeMap.get(id)!.data.level},${y}`);
             }
 
-            // Assign this single node and any of its floating children starting from the empty slot
-            assignY(n.id, testY);
+            let testY = 0;
+            let success = false;
+
+            while (!success) {
+                const testMap = new Map<string, number>();
+                assignY(n.id, testY, testMap, vIndexMap); // Dry run simulation
+
+                let collision = false;
+                for (const [simId, simY] of testMap.entries()) {
+                    const level = nodeMap.get(simId)!.data.level;
+                    if (occupiedGrid.has(`${level},${simY}`)) {
+                        collision = true;
+                        break;
+                    }
+                }
+
+                if (!collision) {
+                    // Valid placement! Found a sequence of empty grid slots for this floating tree.
+                    // Merge testMap into the definite vIndexMap.
+                    for (const [simId, simY] of testMap.entries()) {
+                        vIndexMap.set(simId, simY);
+                    }
+                    // Update global tracker only if this floating tree hangs below it
+                    let maxTreeY = testY;
+                    for (const y of testMap.values()) maxTreeY = Math.max(maxTreeY, y);
+                    currentNextY = Math.max(currentNextY, maxTreeY + 1);
+
+                    success = true;
+                } else {
+                    testY++; // Try shifting the whole floating tree down by 1 grid cell
+                }
+            }
         });
 
         // Apply calculated indices back to node data
