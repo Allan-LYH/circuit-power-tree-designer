@@ -1,11 +1,15 @@
 import { usePowerTreeStore } from '../stores/usePowerTreeStore';
 import type { PowerNodeData } from '../stores/usePowerTreeStore';
 import { Panel } from '@xyflow/react';
+import { Copy, ClipboardPaste, Trash2 } from 'lucide-react';
 
 export default function PropertiesPanel() {
     const nodes = usePowerTreeStore(state => state.nodes);
     const updateNodeData = usePowerTreeStore(state => state.updateNodeData);
     const removeNode = usePowerTreeStore(state => state.removeNode);
+    const copyNodeData = usePowerTreeStore(state => state.copyNodeData);
+    const pasteNodeData = usePowerTreeStore(state => state.pasteNodeData);
+    const clipboard = usePowerTreeStore(state => state.clipboard);
 
     // Find selected node
     const selectedNode = nodes.find((n: any) => n.selected);
@@ -13,20 +17,49 @@ export default function PropertiesPanel() {
 
     if (!selectedNode || !data) return null;
 
+    const canPaste = clipboard?.type === data.type;
+
     const handleChange = (key: keyof PowerNodeData, value: string | number | boolean) => {
         updateNodeData(selectedNode.id, { [key]: value });
     };
 
     return (
         <Panel position="top-right" className="w-80 rounded-xl border border-zinc-800 bg-zinc-900/95 p-4 shadow-2xl backdrop-blur animate-in fade-in slide-in-from-right-4">
-            <div className="mb-4 flex items-center justify-between border-b border-zinc-800 pb-2">
-                <h2 className="font-semibold text-zinc-100">Node Properties</h2>
-                <button
-                    onClick={() => removeNode(selectedNode.id)}
-                    className="text-xs text-rose-500 hover:text-rose-400 font-medium px-2 py-1 hover:bg-rose-500/10 rounded"
-                >
-                    Delete
-                </button>
+            <div className="mb-4 flex flex-col gap-2 border-b border-zinc-800 pb-3">
+                <div className="flex items-center justify-between">
+                    <h2 className="font-semibold text-zinc-100">Node Properties</h2>
+                    <button
+                        onClick={() => removeNode(selectedNode.id)}
+                        className="flex items-center gap-1 text-xs text-rose-500 hover:text-rose-400 font-medium px-2 py-1 hover:bg-rose-500/10 rounded transition-colors"
+                        title="Delete Node"
+                    >
+                        <Trash2 size={14} />
+                        <span>Delete</span>
+                    </button>
+                </div>
+
+                {data.type !== 'powerSource' && (
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => copyNodeData(selectedNode.id)}
+                            className="flex-1 flex items-center justify-center gap-1.5 text-xs text-zinc-300 hover:text-indigo-400 font-medium px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded transition-colors border border-zinc-700"
+                        >
+                            <Copy size={14} />
+                            <span>Copy Parameters</span>
+                        </button>
+                        <button
+                            onClick={() => pasteNodeData(selectedNode.id)}
+                            disabled={!canPaste}
+                            className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded transition-colors border ${canPaste
+                                    ? 'text-zinc-300 hover:text-emerald-400 bg-zinc-800 hover:bg-zinc-700 border-zinc-700 cursor-pointer'
+                                    : 'text-zinc-600 bg-zinc-900 border-zinc-800 cursor-not-allowed'
+                                }`}
+                        >
+                            <ClipboardPaste size={14} />
+                            <span>Paste Parameters</span>
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-4">

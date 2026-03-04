@@ -62,8 +62,8 @@ export default function ConverterNode({ id, data, selected }: NodeProps<PowerNod
           <p className="text-[10px] text-zinc-400 font-medium uppercase tracking-widest text-sky-500/80">Buck/LDO L{data.level}</p>
         </div>
         <div className="flex items-center gap-0.5 bg-zinc-950/40 border border-zinc-800/80 rounded-md p-0.5">
-          <button onClick={(e) => { e.stopPropagation(); moveNodeVertical(id, 'up'); }} className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition-colors"><ChevronUp size={12} /></button>
-          <button onClick={(e) => { e.stopPropagation(); moveNodeVertical(id, 'down'); }} className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition-colors"><ChevronDown size={12} /></button>
+          <button onClick={(e) => { e.stopPropagation(); moveNodeVertical(id, 'up'); }} className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition-colors" title="Move Up"><ChevronUp size={12} /></button>
+          <button onClick={(e) => { e.stopPropagation(); moveNodeVertical(id, 'down'); }} className="p-1 hover:bg-zinc-800 rounded text-zinc-500 hover:text-zinc-300 transition-colors" title="Move Down"><ChevronDown size={12} /></button>
           <div className="w-px h-3 bg-zinc-800 mx-0.5" />
           <button
             onClick={(e) => { e.stopPropagation(); removeNode(id); }}

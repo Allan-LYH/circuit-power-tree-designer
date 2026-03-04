@@ -93,6 +93,9 @@ interface PowerTreeState {
     applyLayout: () => void;
     exportProject: () => string;
     importProject: (jsonString: string) => void;
+    clipboard: Partial<PowerNodeData> | null;
+    copyNodeData: (id: string) => void;
+    pasteNodeData: (id: string) => void;
 }
 
 const COLUMN_WIDTH = 360;
@@ -144,6 +147,36 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         } catch (error) {
             console.error("Failed to import project:", error);
             alert("Failed to import project. The file might be corrupted or invalid.");
+        }
+    },
+
+    clipboard: null,
+
+    copyNodeData: (id: string) => {
+        const node = get().nodes.find(n => n.id === id);
+        if (node) {
+            // Deep copy to break references, exclude calculated/structural fields
+            const dataToCopy = JSON.parse(JSON.stringify(node.data));
+            delete dataToCopy.label; // Optional: maybe don't copy the label so instances stay uniquely named
+            delete dataToCopy.level;
+            delete dataToCopy.verticalIndex;
+            delete dataToCopy.calcVoltage;
+            delete dataToCopy.calcCurrent;
+            delete dataToCopy.calcPower;
+            delete dataToCopy.error;
+            set({ clipboard: dataToCopy });
+        }
+    },
+
+    pasteNodeData: (id: string) => {
+        const clipboard = get().clipboard;
+        if (!clipboard) return;
+
+        const node = get().nodes.find(n => n.id === id);
+        if (node && node.data.type === clipboard.type) {
+            // Only merge if types match (e.g., don't paste Converter params into a PowerSource)
+            // Use updateNodeData to handle all the side-effects (like removing ports if MUX count goes down)
+            get().updateNodeData(id, clipboard);
         }
     },
 
