@@ -89,18 +89,30 @@ interface PowerTreeState {
     updateNodeData: (id: string, data: Partial<PowerNodeData>) => void;
     moveNodeVertical: (id: string, direction: 'up' | 'down') => void;
     removeEdge: (id: string) => void;
+    /** Recalculates all topological levels, voltages, currents, and power metrics */
     calculateTree: () => void;
+    /** Triggers the grid auto-layout engine to reposition nodes based on their levels */
     applyLayout: () => void;
+    /** Serializes the current project state (nodes, edges, settings) to a JSON string */
     exportProject: () => string;
+    /** Parses a JSON string to restore project state, overwriting current canvas */
     importProject: (jsonString: string) => void;
+    /** Holds the data of the currently copied node for the copy/paste functionality */
     clipboard: Partial<PowerNodeData> | null;
+    /** Copies the numerical/settings parameters (excluding ID/structural data) of a node to clipboard */
     copyNodeData: (id: string) => void;
+    /** Pastes the clipboard settings to the target node, enforcing type matching */
     pasteNodeData: (id: string) => void;
 }
 
 const COLUMN_WIDTH = 360;
 const ROW_HEIGHT = 220;
 
+/**
+ * The main Zustand store that drives the Circuit Power Tree Designer.
+ * It manages the graph state (nodes, edges), view modes, layout engine, 
+ * and the core calculation engine for power delivery metrics.
+ */
 export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     viewMode: 'full',
     setViewMode: (mode: ViewMode) => set({ viewMode: mode }),
@@ -247,6 +259,10 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         get().calculateTree();
     },
 
+    /**
+     * Updates specific data fields of a node. 
+     * Handles side-effects like cleaning up stale edges when MuxSwitch ports decrease.
+     */
     updateNodeData: (id: string, data: Partial<PowerNodeData>) => {
         const nodes = get().nodes;
         const node = nodes.find(n => n.id === id);
@@ -299,6 +315,10 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         get().calculateTree();
     },
 
+    /**
+     * Reorders nodes vertically within the same hierarchical level.
+     * Crucial to call calculateTree() afterwards to ensure downstream nodes sort accordingly.
+     */
     moveNodeVertical: (id: string, direction: 'up' | 'down') => {
         const { nodes } = get();
         const node = nodes.find(n => n.id === id);
@@ -326,10 +346,18 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         }
     },
 
+    /**
+     * The core Calculation Engine.
+     * Evaluates the entire power tree by establishing directed adjacency graphs.
+     * 1. Evaluates logical depth (level) of each node via BFS from sources.
+     * 2. Propagates voltages downward from sources to loads.
+     * 3. Aggregates current usage backwards from loads up to sources.
+     * 4. Updates vertical Y indices to drive the grid auto-layout grid.
+     */
     calculateTree: () => {
         const { nodes, edges } = get();
 
-        // 1. Build Adjacency
+        // Step 1: Build Adjacency Map for Forward (adj) and Reverse (revAdj) lookups
         const adj = new Map<string, string[]>();
         const revAdj = new Map<string, string[]>();
         nodes.forEach(n => { adj.set(n.id, []); revAdj.set(n.id, []); });
@@ -344,7 +372,7 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         }));
         const nodeMap = new Map(newNodes.map(n => [n.id, n]));
 
-        // 2. Assign Levels (Topological Depth)
+        // Step 2: Assign Levels (Topological Depth via BFS)
         const roots = newNodes.filter(n => (revAdj.get(n.id) || []).length === 0);
         const queue: { id: string, level: number }[] = roots.map(r => ({ id: r.id, level: 0 }));
 
@@ -371,7 +399,8 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             }
         });
 
-        // 3. Power Calcs (Voltage Forward)
+        // Step 3: Voltage Propagation (Forward Topo Sort)
+        // Pushes voltages downstream, applying drops/efficiencies depending on component type.
         const topoQueue = [...roots.map(r => r.id)];
         const processedV = new Set<string>();
         while (topoQueue.length > 0) {
@@ -429,7 +458,8 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             (adj.get(currId) || []).forEach(cid => topoQueue.push(cid));
         }
 
-        // 4. Current Calcs (Backward)
+        // Step 4: Current Aggregation (Backward Topo Sort)
+        // Sums up load demands and propagates required currents upstream to the source.
         const inDegree = new Map<string, number>();
         newNodes.forEach(n => inDegree.set(n.id, (adj.get(n.id) || []).length));
         const backQueue = newNodes.filter(n => (inDegree.get(n.id) || 0) === 0).map(n => n.id);
@@ -507,7 +537,10 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             });
         }
 
-        // 5. Update Vertical Indices based on tree structure (1-to-1 follow)
+        // Step 5: Update Vertical Indices based on tree structure
+        // This calculates how much vertical height (rows) each branch and sub-branch consumes,
+        // effectively driving the auto-layout engine to pack nodes without overlaps.
+
         // Reset all vertical indices to undefined initially (so we know what's unassigned)
         const vIndexMap = new Map<string, number>();
         let currentNextY = 0; // Tracks the next available row index for independent branches

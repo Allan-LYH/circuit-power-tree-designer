@@ -36,6 +36,9 @@ function FlowApp() {
     addNode(nodeType);
   };
 
+  /**
+   * Serializes the current project state into a JSON Blob and triggers a browser download.
+   */
   const handleExport = () => {
     const jsonString = exportProject();
     const blob = new Blob([jsonString], { type: 'application/json' });
@@ -47,10 +50,16 @@ function FlowApp() {
     URL.revokeObjectURL(url);
   };
 
+  /**
+   * Programs a click on the hidden text input to open the file selection dialog.
+   */
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
 
+  /**
+   * Reads the selected JSON file and attempts to parse and import it into the Zustand store.
+   */
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
