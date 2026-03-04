@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-slate-50 overflow-hidden antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
