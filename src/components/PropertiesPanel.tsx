@@ -2,6 +2,7 @@ import { usePowerTreeStore } from '../stores/usePowerTreeStore';
 import type { PowerNodeData } from '../stores/usePowerTreeStore';
 import { Panel } from '@xyflow/react';
 import { Copy, ClipboardPaste, Trash2 } from 'lucide-react';
+import { NodeInput } from './NodeInput';
 
 export default function PropertiesPanel() {
     const nodes = usePowerTreeStore(state => state.nodes);
@@ -51,8 +52,8 @@ export default function PropertiesPanel() {
                             onClick={() => pasteNodeData(selectedNode.id)}
                             disabled={!canPaste}
                             className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium px-2 py-1.5 rounded transition-colors border ${canPaste
-                                    ? 'text-zinc-300 hover:text-emerald-400 bg-zinc-800 hover:bg-zinc-700 border-zinc-700 cursor-pointer'
-                                    : 'text-zinc-600 bg-zinc-900 border-zinc-800 cursor-not-allowed'
+                                ? 'text-zinc-300 hover:text-emerald-400 bg-zinc-800 hover:bg-zinc-700 border-zinc-700 cursor-pointer'
+                                : 'text-zinc-600 bg-zinc-900 border-zinc-800 cursor-not-allowed'
                                 }`}
                         >
                             <ClipboardPaste size={14} />
@@ -77,20 +78,20 @@ export default function PropertiesPanel() {
                     <>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">Output Voltage (V)</label>
-                            <input
-                                type="number" step="0.1"
+                            <NodeInput
                                 value={data.outVoltage}
-                                onChange={e => handleChange('outVoltage', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('outVoltage', parseFloat(v))}
+                                step="0.1"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">Max Current (A)</label>
-                            <input
-                                type="number" step="0.1"
+                            <NodeInput
                                 value={data.maxCurrent}
-                                onChange={e => handleChange('maxCurrent', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('maxCurrent', parseFloat(v))}
+                                step="0.1"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                     </>
@@ -100,20 +101,20 @@ export default function PropertiesPanel() {
                     <>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">Output Voltage (V)</label>
-                            <input
-                                type="number" step="0.1"
+                            <NodeInput
                                 value={data.outVoltage}
-                                onChange={e => handleChange('outVoltage', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('outVoltage', parseFloat(v))}
+                                step="0.1"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">Efficiency (0.0 - 1.0)</label>
-                            <input
-                                type="number" step="0.05" min="0" max="1"
+                            <NodeInput
                                 value={data.efficiency}
-                                onChange={e => handleChange('efficiency', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('efficiency', parseFloat(v))}
+                                step="0.05"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                         <div>
@@ -140,16 +141,16 @@ export default function PropertiesPanel() {
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
                                     <label className="mb-1 block text-[10px] text-zinc-400">Min Vin (V)</label>
-                                    <input type="number" step="0.1" value={data.minInVoltage || ''} onChange={e => handleChange('minInVoltage', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                    <NodeInput value={data.minInVoltage || 0} onUpdate={v => handleChange('minInVoltage', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-[10px] text-zinc-400">Max Vin (V)</label>
-                                    <input type="number" step="0.1" value={data.maxInVoltage || ''} onChange={e => handleChange('maxInVoltage', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                    <NodeInput value={data.maxInVoltage || 0} onUpdate={v => handleChange('maxInVoltage', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                                 </div>
                             </div>
                             <div>
                                 <label className="mb-1 block text-[10px] text-zinc-400">Max Output Current (A)</label>
-                                <input type="number" step="0.1" value={data.maxOutCurrent || ''} onChange={e => handleChange('maxOutCurrent', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                <NodeInput value={data.maxOutCurrent || 0} onUpdate={v => handleChange('maxOutCurrent', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                             </div>
                         </div>
                     </>
@@ -159,20 +160,20 @@ export default function PropertiesPanel() {
                     <>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">Required Voltage (V)</label>
-                            <input
-                                type="number" step="0.1"
+                            <NodeInput
                                 value={data.reqVoltage}
-                                onChange={e => handleChange('reqVoltage', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('reqVoltage', parseFloat(v))}
+                                step="0.1"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">Required Current (A)</label>
-                            <input
-                                type="number" step="0.1"
+                            <NodeInput
                                 value={data.reqCurrent}
-                                onChange={e => handleChange('reqCurrent', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('reqCurrent', parseFloat(v))}
+                                step="0.1"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                         <div className="pt-3 pb-1 border-t border-zinc-800 mt-4">
@@ -180,11 +181,11 @@ export default function PropertiesPanel() {
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
                                     <label className="mb-1 block text-[10px] text-zinc-400">Min Vin (V)</label>
-                                    <input type="number" step="0.1" value={data.minInVoltage || ''} onChange={e => handleChange('minInVoltage', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                    <NodeInput value={data.minInVoltage || 0} onUpdate={v => handleChange('minInVoltage', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                                 </div>
                                 <div>
                                     <label className="mb-1 block text-[10px] text-zinc-400">Max Vin (V)</label>
-                                    <input type="number" step="0.1" value={data.maxInVoltage || ''} onChange={e => handleChange('maxInVoltage', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                    <NodeInput value={data.maxInVoltage || 0} onUpdate={v => handleChange('maxInVoltage', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                                 </div>
                             </div>
                         </div>
@@ -195,11 +196,11 @@ export default function PropertiesPanel() {
                     <>
                         <div>
                             <label className="mb-1 block text-xs font-medium text-zinc-400">R_ON Resistance (mΩ)</label>
-                            <input
-                                type="number" step="1"
+                            <NodeInput
                                 value={data.rOn}
-                                onChange={e => handleChange('rOn', parseFloat(e.target.value))}
-                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                onUpdate={v => handleChange('rOn', parseFloat(v))}
+                                step="1"
+                                className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                             />
                         </div>
                         <div>
@@ -226,16 +227,16 @@ export default function PropertiesPanel() {
                             <div className="grid grid-cols-2 gap-2 mb-2">
                                 <div>
                                     <label className="mb-1 block text-[10px] text-zinc-400">Min Vin (V)</label>
-                                    <input type="number" step="0.1" value={data.minInVoltage || ''} onChange={e => handleChange('minInVoltage', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                    <NodeInput value={data.minInVoltage || 0} onUpdate={v => handleChange('minInVoltage', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                                 </div>
                                 <div>
-                                    <label className="mb-1 block text-[10px] text-zinc-400">Max Vin (V)</label>
-                                    <input type="number" step="0.1" value={data.maxInVoltage || ''} onChange={e => handleChange('maxInVoltage', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                    <label className="mb-1 block text-[10px] text-[10px] text-zinc-400">Max Vin (V)</label>
+                                    <NodeInput value={data.maxInVoltage || 0} onUpdate={v => handleChange('maxInVoltage', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                                 </div>
                             </div>
                             <div>
                                 <label className="mb-1 block text-[10px] text-zinc-400">Max Output Current (A)</label>
-                                <input type="number" step="0.1" value={data.maxCurrent || ''} onChange={e => handleChange('maxCurrent', parseFloat(e.target.value) || 0)} className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200" placeholder="none" />
+                                <NodeInput value={data.maxCurrent || 0} onUpdate={v => handleChange('maxCurrent', parseFloat(v) || 0)} step="0.1" className="w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-200 text-left" />
                             </div>
                         </div>
                     </>
@@ -246,20 +247,20 @@ export default function PropertiesPanel() {
                         <div className="grid grid-cols-2 gap-2">
                             <div>
                                 <label className="mb-1 block text-xs font-medium text-zinc-400">IN Ports</label>
-                                <input
-                                    type="number" step="1" min="1" max="8"
+                                <NodeInput
                                     value={data.inPorts || 1}
-                                    onChange={e => handleChange('inPorts', parseInt(e.target.value, 10) || 1)}
-                                    className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                    onUpdate={v => handleChange('inPorts', parseInt(v, 10) || 1)}
+                                    step="1"
+                                    className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                                 />
                             </div>
                             <div>
                                 <label className="mb-1 block text-xs font-medium text-zinc-400">OUT Ports</label>
-                                <input
-                                    type="number" step="1" min="1" max="8"
+                                <NodeInput
                                     value={data.outPorts || 1}
-                                    onChange={e => handleChange('outPorts', parseInt(e.target.value, 10) || 1)}
-                                    className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200"
+                                    onUpdate={v => handleChange('outPorts', parseInt(v, 10) || 1)}
+                                    step="1"
+                                    className="w-full rounded border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 text-left"
                                 />
                             </div>
                         </div>

@@ -195,7 +195,7 @@ function FlowApp() {
           <Controls />
 
           <Panel position="top-left" className="flex gap-2">
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/90 p-2 shadow-lg backdrop-blur flex gap-2">
+            <div className="rounded-lg border border-zinc-800 bg-zinc-900/90 p-2 shadow-lg backdrop-blur flex flex-col gap-2">
               <button
                 onClick={() => handleAddNode('powerSource')}
                 className="rounded bg-zinc-800 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-zinc-700 transition-colors border border-emerald-500/20"

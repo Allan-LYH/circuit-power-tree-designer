@@ -34,7 +34,7 @@ export function NodeInput({
             onKeyDown={handleKeyDown}
             onPointerDown={(e) => e.stopPropagation()}
             step={step}
-            className={`border-b border-dashed border-zinc-700 hover:border-zinc-500 rounded-none pb-0.5 min-w-[32px] text-center ${className}`}
+            className={`nopan nodrag [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-b border-dashed border-zinc-700 hover:border-zinc-500 rounded-none pb-0.5 min-w-[32px] text-center ${className}`}
         />
     );
 }
