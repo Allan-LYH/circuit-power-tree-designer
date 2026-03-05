@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ReactFlow, Background, Controls, Panel, ReactFlowProvider, BackgroundVariant, ConnectionLineType } from '@xyflow/react';
 import { usePowerTreeStore } from './stores/usePowerTreeStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { NodeType } from './stores/usePowerTreeStore';
 import PowerSourceNode from './components/nodes/PowerSourceNode';
 import ConverterNode from './components/nodes/ConverterNode';
@@ -24,7 +25,25 @@ const edgeTypes = {
 };
 
 function FlowApp() {
-  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, calculateTree, viewMode, setViewMode, edgeStyle, setEdgeStyle, exportProject, importProject } = usePowerTreeStore();
+  const { nodes, edges, onNodesChange, onEdgesChange, onConnect, addNode, calculateTree, viewMode, setViewMode, edgeStyle, setEdgeStyle, autoLayout, setAutoLayout, exportProject, importProject } = usePowerTreeStore(
+    useShallow((state) => ({
+      nodes: state.nodes,
+      edges: state.edges,
+      onNodesChange: state.onNodesChange,
+      onEdgesChange: state.onEdgesChange,
+      onConnect: state.onConnect,
+      addNode: state.addNode,
+      calculateTree: state.calculateTree,
+      viewMode: state.viewMode,
+      setViewMode: state.setViewMode,
+      edgeStyle: state.edgeStyle,
+      setEdgeStyle: state.setEdgeStyle,
+      autoLayout: state.autoLayout,
+      setAutoLayout: state.setAutoLayout,
+      exportProject: state.exportProject,
+      importProject: state.importProject,
+    }))
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initial calculation and layout
@@ -84,10 +103,21 @@ function FlowApp() {
           <p className="text-xs text-zinc-500">Hierarchical Grid Mode</p>
         </div>
         <div className="flex gap-3 items-center">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-lg border border-zinc-700">
+            <span className="text-xs font-medium text-zinc-300">Auto Layout</span>
+            <button
+              onClick={() => setAutoLayout(!autoLayout)}
+              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${autoLayout ? 'bg-indigo-500' : 'bg-zinc-600'}`}
+              title="Toggle Auto-Layout Grid"
+            >
+              <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autoLayout ? 'translate-x-[18px]' : 'translate-x-[2px]'}`} />
+            </button>
+          </div>
+          <div className="h-4 w-[1px] bg-zinc-700 mx-1" />
           <div className="flex bg-zinc-800 rounded-lg p-1 border border-zinc-700">
             <button
               onClick={() => setEdgeStyle('bezier')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${edgeStyle === 'bezier' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-200'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${edgeStyle === 'bezier' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-200'}`}
               title="Curve (Bezier)"
             >
               <Spline size={14} />
@@ -95,7 +125,7 @@ function FlowApp() {
             </button>
             <button
               onClick={() => setEdgeStyle('step')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${edgeStyle === 'step' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-200'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${edgeStyle === 'step' ? 'bg-indigo-600 text-white shadow-lg' : 'text-zinc-400 hover:text-zinc-200'}`}
               title="Orthogonal (Step)"
             >
               <Square size={14} />
@@ -109,6 +139,7 @@ function FlowApp() {
             className="rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:outline-none focus:border-indigo-500"
           >
             <option value="full">Full View</option>
+            <option value="compact">Compact</option>
             <option value="power_only">Power Only</option>
           </select>
           <div className="h-4 w-[1px] bg-zinc-700 mx-1" />
@@ -156,7 +187,7 @@ function FlowApp() {
           connectionLineType={edgeStyle === 'step' ? ConnectionLineType.Step : ConnectionLineType.Bezier}
           fitView
           colorMode="dark"
-          nodesDraggable={false} // Enforce grid position
+          nodesDraggable={false} // Enforce grid position unconditionally according to user request
           nodesConnectable={true}
           elementsSelectable={true}
         >

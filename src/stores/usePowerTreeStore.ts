@@ -71,7 +71,7 @@ export interface MuxSwitchData extends BaseNodeData {
 export type PowerNodeData = PowerSourceData | ConverterData | LoadData | LoadSwitchData | MuxSwitchData;
 export type PowerNode = RFNode<PowerNodeData>;
 
-export type ViewMode = 'full' | 'power_only';
+export type ViewMode = 'full' | 'compact' | 'power_only';
 export type EdgeStyle = 'bezier' | 'step';
 
 interface PowerTreeState {
@@ -79,6 +79,8 @@ interface PowerTreeState {
     setViewMode: (mode: ViewMode) => void;
     edgeStyle: EdgeStyle;
     setEdgeStyle: (style: EdgeStyle) => void;
+    autoLayout: boolean;
+    setAutoLayout: (enabled: boolean) => void;
     nodes: PowerNode[];
     edges: Edge[];
     onNodesChange: OnNodesChange<PowerNode>;
@@ -105,8 +107,39 @@ interface PowerTreeState {
     pasteNodeData: (id: string) => void;
 }
 
-const COLUMN_WIDTH = 360;
-const ROW_HEIGHT = 220;
+/**
+ * The layout engine dynamically accesses these to allow different spacing per viewing mode.
+ */
+export const LAYOUT_CONSTANTS = {
+    NODE_WIDTH: 280,
+    NODE_HEIGHT_FULL: 150,     // Approximate height of a fully expanded node
+    NODE_HEIGHT_COMPACT: 98,   // Exact calculated height of a compact node (2+8+32+8+38+8+2)
+    HORIZONTAL_GAP: 80,        // 80 / 2 = 40px step connector distance
+    VERTICAL_GAP_FULL: 40,     // Matches horizontal step connector distance
+    VERTICAL_GAP_COMPACT: 12,  // Matches rounded-xl border radius
+};
+
+const getLayoutMetrics = (mode: ViewMode) => {
+    const columnWidth = LAYOUT_CONSTANTS.NODE_WIDTH + LAYOUT_CONSTANTS.HORIZONTAL_GAP;
+    switch (mode) {
+        case 'compact':
+            return {
+                columnWidth,
+                rowHeight: LAYOUT_CONSTANTS.NODE_HEIGHT_COMPACT + LAYOUT_CONSTANTS.VERTICAL_GAP_COMPACT
+            };
+        case 'power_only':
+            return {
+                columnWidth,
+                rowHeight: LAYOUT_CONSTANTS.NODE_HEIGHT_FULL + LAYOUT_CONSTANTS.VERTICAL_GAP_FULL
+            };
+        case 'full':
+        default:
+            return {
+                columnWidth,
+                rowHeight: LAYOUT_CONSTANTS.NODE_HEIGHT_FULL + LAYOUT_CONSTANTS.VERTICAL_GAP_FULL
+            };
+    }
+};
 
 /**
  * The main Zustand store that drives the Circuit Power Tree Designer.
@@ -115,7 +148,11 @@ const ROW_HEIGHT = 220;
  */
 export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     viewMode: 'full',
-    setViewMode: (mode: ViewMode) => set({ viewMode: mode }),
+    setViewMode: (mode: ViewMode) => {
+        set({ viewMode: mode });
+        // Re-apply layout when mode changes since metrics might have changed
+        get().applyLayout();
+    },
     edgeStyle: 'bezier',
     setEdgeStyle: (style: EdgeStyle) => {
         set({ edgeStyle: style });
@@ -125,6 +162,13 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             type: style === 'step' ? 'step' : 'default'
         }));
         set({ edges: updatedEdges });
+    },
+    autoLayout: true,
+    setAutoLayout: (enabled: boolean) => {
+        set({ autoLayout: enabled });
+        if (enabled) {
+            get().applyLayout();
+        }
     },
 
     exportProject: () => {
@@ -203,8 +247,9 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     edges: [],
 
     onNodesChange: (changes: NodeChange<PowerNode>[]) => {
-        // Prevent manual dragging from updating position permanently if we want strict grid
+        // Prevent manual dragging from updating position permanently
         const cleanedChanges = changes.filter(c => c.type !== 'position');
+
         set({
             nodes: applyNodeChanges(cleanedChanges, get().nodes),
         });
@@ -241,7 +286,7 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
                 level: 0,
                 verticalIndex: 0,
                 ...(type === 'powerSource' ? { outVoltage: 12, maxCurrent: 2 } : {}),
-                ...(type === 'converter' ? { outVoltage: 5, efficiency: 0.9, controlInterface: '' } : {}),
+                ...(type === 'converter' ? { outVoltage: 5, efficiency: 0.9, controlInterface: '', maxOutCurrent: 3 } : {}),
                 ...(type === 'load' ? { reqVoltage: 5, reqCurrent: 1 } : {}),
                 ...(type === 'loadSwitch' ? { rOn: 50, maxCurrent: 2, controlInterface: '' } : {}),
                 ...(type === 'muxSwitch' ? { inPorts: 2, outPorts: 1, controlInterface: 'SEL' } : {}),
@@ -316,24 +361,66 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     },
 
     /**
-     * Reorders nodes vertically within the same hierarchical level.
+     * Reorders nodes vertically among structural siblings (nodes sharing the same parent branch).
      * Crucial to call calculateTree() afterwards to ensure downstream nodes sort accordingly.
      */
     moveNodeVertical: (id: string, direction: 'up' | 'down') => {
-        const { nodes } = get();
+        const { nodes, edges, autoLayout, viewMode } = get();
         const node = nodes.find(n => n.id === id);
         if (!node) return;
 
-        const levelNodes = nodes.filter(n => n.data.level === node.data.level)
-            .sort((a, b) => a.data.verticalIndex - b.data.verticalIndex);
+        if (!autoLayout) {
+            // Manual Mode: Move exactly one row height, swap if occupied
+            const { rowHeight } = getLayoutMetrics(viewMode);
+            const deltaY = direction === 'up' ? -rowHeight : rowHeight;
+            const targetY = node.position.y + deltaY;
+            const targetX = node.position.x;
 
-        const currentIndex = levelNodes.findIndex(n => n.id === id);
+            const occupyingNode = nodes.find(n =>
+                n.id !== id &&
+                Math.abs(n.position.x - targetX) < 5 &&
+                Math.abs(n.position.y - targetY) < 5
+            );
+
+            const newNodes = nodes.map(n => {
+                if (n.id === node.id) {
+                    return { ...n, position: { ...n.position, y: targetY } };
+                }
+                if (occupyingNode && n.id === occupyingNode.id) {
+                    return { ...n, position: { ...n.position, y: node.position.y } };
+                }
+                return n;
+            });
+
+            set({ nodes: newNodes });
+            get().calculateTree();
+            return;
+        }
+
+        // Auto Layout Mode: Relational sibling sorting
+        // Find structural siblings (nodes sharing the same parent, or all root nodes if no parent)
+        const incomingEdges = edges.filter(e => e.target === id && !(e.data as any)?.isCyclic);
+        const parentIds = incomingEdges.map(e => e.source);
+
+        let siblings: PowerNode[] = [];
+        if (parentIds.length === 0) {
+            siblings = nodes.filter(n => !edges.some(e => e.target === n.id && !(e.data as any)?.isCyclic));
+        } else {
+            siblings = nodes.filter(n => {
+                const nIncoming = edges.filter(e => e.target === n.id && !(e.data as any)?.isCyclic);
+                return nIncoming.some(e => parentIds.includes(e.source));
+            });
+        }
+
+        const sortedSiblings = siblings.sort((a, b) => (a.data.verticalIndex || 0) - (b.data.verticalIndex || 0));
+
+        const currentIndex = sortedSiblings.findIndex(n => n.id === id);
         const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
-        if (targetIndex >= 0 && targetIndex < levelNodes.length) {
-            const otherNode = levelNodes[targetIndex];
+        if (targetIndex >= 0 && targetIndex < sortedSiblings.length) {
+            const otherNode = sortedSiblings[targetIndex];
 
-            // Swap vertical indices with proper immutability
+            // Swap vertical indices
             const newNodes = nodes.map(n => {
                 if (n.id === node.id) return { ...n, data: { ...n.data, verticalIndex: otherNode.data.verticalIndex } };
                 if (n.id === otherNode.id) return { ...n, data: { ...n.data, verticalIndex: node.data.verticalIndex } };
@@ -357,11 +444,42 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     calculateTree: () => {
         const { nodes, edges } = get();
 
+        // --- CYCLE DETECTION & ENGINE ISOLATION ---
+        // We use Depth-First Search (DFS) to identify back-edges which create infinite loops.
+        const cyclicEdgeIds = new Set<string>();
+        const visitState = new Map<string, 0 | 1 | 2>();
+        nodes.forEach(n => visitState.set(n.id, 0));
+
+        const detectCycles = (nodeId: string) => {
+            visitState.set(nodeId, 1); // 1 = currently visiting (in our active path)
+            edges.filter(e => e.source === nodeId).forEach(edge => {
+                const targetId = edge.target;
+                const state = visitState.get(targetId);
+                if (state === 1) {
+                    // Back-edge detected! This edge connects back to an ancestor, creating a cycle.
+                    cyclicEdgeIds.add(edge.id);
+                } else if (state === 0) {
+                    detectCycles(targetId);
+                }
+            });
+            visitState.set(nodeId, 2); // 2 = fully visited
+        };
+
+        // Start DFS from natural roots (nodes with no incoming edges) to map the primary flow
+        nodes.filter(n => !edges.some(e => e.target === n.id)).forEach(r => {
+            if (visitState.get(r.id) === 0) detectCycles(r.id);
+        });
+        // Catch any isolated pure-cycle components that have no natural roots
+        nodes.forEach(n => {
+            if (visitState.get(n.id) === 0) detectCycles(n.id);
+        });
+
         // Step 1: Build Adjacency Map for Forward (adj) and Reverse (revAdj) lookups
         const adj = new Map<string, string[]>();
         const revAdj = new Map<string, string[]>();
         nodes.forEach(n => { adj.set(n.id, []); revAdj.set(n.id, []); });
         edges.forEach(e => {
+            if (cyclicEdgeIds.has(e.id)) return; // IGNORE CYCLIC EDGES to guarantee a perfect Directed Acyclic Graph (DAG)
             if (adj.has(e.source)) adj.get(e.source)!.push(e.target);
             if (revAdj.has(e.target)) revAdj.get(e.target)!.push(e.source);
         });
@@ -647,16 +765,56 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             n.data.verticalIndex = vIndexMap.get(n.id) || 0;
         });
 
+        // Step 6: Highlight cyclic edges visually (Red line & Animated to warn user)
+        let edgesChanged = false;
+        const newEdgesLayout = edges.map(e => {
+            const isCyclic = cyclicEdgeIds.has(e.id);
+            const currentlyCyclic = !!(e.data as any)?.isCyclic;
+
+            if (isCyclic && !currentlyCyclic) {
+                edgesChanged = true;
+                return {
+                    ...e,
+                    animated: true,
+                    style: { ...e.style, stroke: '#ef4444', strokeWidth: 3 }, // tailwind red-500
+                    data: { ...e.data, isCyclic: true }
+                };
+            } else if (!isCyclic && currentlyCyclic) {
+                edgesChanged = true;
+                const newStyle = { ...e.style } as any;
+                delete newStyle.stroke;
+                delete newStyle.strokeWidth;
+                const newData = { ...e.data } as any;
+                delete newData.isCyclic;
+
+                return {
+                    ...e,
+                    animated: false,
+                    style: Object.keys(newStyle).length > 0 ? newStyle : undefined,
+                    data: newData
+                };
+            }
+            return e;
+        });
+
         set({ nodes: newNodes });
+        if (edgesChanged) {
+            set({ edges: newEdgesLayout });
+        }
         get().applyLayout();
     },
 
     applyLayout: () => {
-        const { nodes } = get();
+        const { nodes, viewMode, autoLayout } = get();
+
+        if (!autoLayout) return; // Skip automatic repositioning if user turned it off
+
+        const { columnWidth, rowHeight } = getLayoutMetrics(viewMode);
+
         // 5. Final Layout updates
         const layoutedNodes = nodes.map(node => {
-            const newX = node.data.level * COLUMN_WIDTH;
-            const newY = node.data.verticalIndex * ROW_HEIGHT;
+            const newX = node.data.level * columnWidth;
+            const newY = node.data.verticalIndex * rowHeight;
             const positionChanged = node.position.x !== newX || node.position.y !== newY;
 
             return {
