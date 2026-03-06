@@ -5,10 +5,13 @@ export type NodeType = 'powerSource' | 'converter' | 'load' | 'loadSwitch' | 'mu
 export interface BaseNodeData extends Record<string, unknown> {
     label: string;
     type: NodeType;
-    calcVoltage?: number;
-    calcCurrent?: number;
-    calcPower?: number;
+    calcInVoltage?: number; // Voltage at input terminal
+    calcVoltage?: number;   // Voltage at output terminal (provided to downstream)
+    calcCurrent?: number;   // Total load current at output terminal
+    calcInCurrent?: number; // Total drawn current at input terminal
+    calcPower?: number;     // Power loss/consumption of the node itself
     error?: string;
+    warning?: string;
     showControlLogic?: boolean;
     level: number;
     verticalIndex: number;

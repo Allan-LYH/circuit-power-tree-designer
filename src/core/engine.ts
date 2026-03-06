@@ -114,7 +114,7 @@ export const calculatePowerTree = (nodes: PowerNode[], edges: Edge[]): { updated
 
     const newNodes = nodes.map(n => ({
         ...n,
-        data: { ...n.data, error: undefined, calcVoltage: undefined, calcCurrent: 0, calcPower: 0, level: 0 } as PowerNodeData
+        data: { ...n.data, error: undefined, warning: undefined, calcInVoltage: undefined, calcVoltage: undefined, calcCurrent: 0, calcInCurrent: 0, calcPower: 0, level: 0 } as PowerNodeData
     }));
     const nodeMap = new Map(newNodes.map(n => [n.id, n]));
 
@@ -154,49 +154,67 @@ export const calculatePowerTree = (nodes: PowerNode[], edges: Edge[]): { updated
         processedV.add(currId);
 
         const curr = nodeMap.get(currId)!;
+        const parents = calcRevAdj.get(currId) || [];
+        const inV = parents.length > 0 ? nodeMap.get(parents[0])?.data.calcVoltage : undefined;
+        curr.data.calcInVoltage = inV;
+
         if (curr.data.type === 'powerSource') {
             curr.data.calcVoltage = curr.data.outVoltage;
+            curr.data.calcInVoltage = curr.data.outVoltage; // Source is its own input for consistency
         } else if (curr.data.type === 'converter') {
             curr.data.calcVoltage = curr.data.outVoltage;
-            const parents = calcRevAdj.get(currId) || [];
-            if (parents.length > 0) {
-                const inV = nodeMap.get(parents[0])?.data.calcVoltage;
-                if (inV !== undefined) {
-                    if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0 && inV < curr.data.minInVoltage) {
+            if (inV !== undefined) {
+                if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0) {
+                    if (inV < curr.data.minInVoltage) {
                         curr.data.error = `Vin Too Low: ${inV.toFixed(1)}V < ${curr.data.minInVoltage}V`;
-                    } else if (curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0 && inV > curr.data.maxInVoltage) {
-                        curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
-                    } else if (inV < curr.data.outVoltage) {
-                        curr.data.error = `Under-voltage Input: ${inV.toFixed(1)}V < ${curr.data.outVoltage}V`;
+                    } else if (inV < curr.data.minInVoltage * 1.1) {
+                        curr.data.warning = `Low Vin Margin: ${inV.toFixed(1)}V (Min ${curr.data.minInVoltage}V)`;
                     }
+                }
+                if (!curr.data.error && curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0) {
+                    if (inV > curr.data.maxInVoltage) {
+                        curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
+                    } else if (inV > curr.data.maxInVoltage * 0.9) {
+                        curr.data.warning = `High Vin Margin: ${inV.toFixed(1)}V (Max ${curr.data.maxInVoltage}V)`;
+                    }
+                }
+                if (!curr.data.error && inV < curr.data.outVoltage) {
+                    curr.data.error = `Under-voltage Input: ${inV.toFixed(1)}V < ${curr.data.outVoltage}V`;
                 }
             }
         } else if (curr.data.type === 'loadSwitch' || curr.data.type === 'muxSwitch') {
-            const parents = calcRevAdj.get(currId) || [];
-            if (parents.length > 0) {
-                const inV = nodeMap.get(parents[0])?.data.calcVoltage;
-                curr.data.calcVoltage = inV;
-                if (inV !== undefined && curr.data.type === 'loadSwitch') {
-                    if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0 && inV < curr.data.minInVoltage) {
+            curr.data.calcVoltage = inV; // Propagate incoming voltage (vDrop will refine this in backward pass)
+            if (inV !== undefined && curr.data.type === 'loadSwitch') {
+                if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0) {
+                    if (inV < curr.data.minInVoltage) {
                         curr.data.error = `Vin Too Low: ${inV.toFixed(1)}V < ${curr.data.minInVoltage}V`;
-                    } else if (curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0 && inV > curr.data.maxInVoltage) {
+                    }
+                }
+                if (!curr.data.error && curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0) {
+                    if (inV > curr.data.maxInVoltage) {
                         curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
                     }
                 }
             }
         } else if (curr.data.type === 'load') {
-            const parents = calcRevAdj.get(currId) || [];
-            if (parents.length > 0) {
-                const inV = nodeMap.get(parents[0])?.data.calcVoltage;
-                curr.data.calcVoltage = inV;
-                if (inV !== undefined) {
-                    if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0 && inV < curr.data.minInVoltage) {
+            curr.data.calcVoltage = inV;
+            if (inV !== undefined) {
+                if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0) {
+                    if (inV < curr.data.minInVoltage) {
                         curr.data.error = `Vin Too Low: ${inV.toFixed(1)}V < ${curr.data.minInVoltage}V`;
-                    } else if (curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0 && inV > curr.data.maxInVoltage) {
-                        curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
-                    } else if (!curr.data.minInVoltage && !curr.data.maxInVoltage && Math.abs(inV - curr.data.reqVoltage) > 0.1) {
-                        curr.data.error = `Voltage Mismatch: Need ${curr.data.reqVoltage}V, got ${inV.toFixed(1)}V`;
+                    } else if (inV < curr.data.minInVoltage * 1.1) {
+                        curr.data.warning = `Low Vin Margin: ${inV.toFixed(1)}V (Min ${curr.data.minInVoltage}V)`;
                     }
+                }
+                if (!curr.data.error && curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0) {
+                    if (inV > curr.data.maxInVoltage) {
+                        curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
+                    } else if (inV > curr.data.maxInVoltage * 0.9) {
+                        curr.data.warning = `High Vin Margin: ${inV.toFixed(1)}V (Max ${curr.data.maxInVoltage}V)`;
+                    }
+                }
+                if (!curr.data.error && !curr.data.minInVoltage && !curr.data.maxInVoltage && Math.abs(inV - curr.data.reqVoltage) > 0.1) {
+                    curr.data.error = `Voltage Mismatch: Need ${curr.data.reqVoltage}V, got ${inV.toFixed(1)}V`;
                 }
             }
         }
@@ -212,69 +230,61 @@ export const calculatePowerTree = (nodes: PowerNode[], edges: Edge[]): { updated
         const currId = backQueue.shift()!;
         const curr = nodeMap.get(currId)!;
 
+        // Sum up currents drawn by all children (using their input current)
+        let totalOutCurrent = 0;
+        (calcAdj.get(currId) || []).forEach(cid => {
+            totalOutCurrent += nodeMap.get(cid)!.data.calcInCurrent || 0;
+        });
+        curr.data.calcCurrent = totalOutCurrent;
+
         if (curr.data.type === 'load') {
             curr.data.calcCurrent = curr.data.reqCurrent;
+            curr.data.calcInCurrent = curr.data.reqCurrent;
             curr.data.calcPower = (curr.data.calcVoltage || 0) * curr.data.reqCurrent;
         } else if (curr.data.type === 'converter') {
-            let outCurrent = 0;
-            (calcAdj.get(currId) || []).forEach(cid => outCurrent += nodeMap.get(cid)!.data.calcCurrent || 0);
-            curr.data.calcCurrent = outCurrent;
-            const outP = curr.data.outVoltage * outCurrent;
+            const outP = curr.data.outVoltage * totalOutCurrent;
+            const inV = curr.data.calcInVoltage || 1;
             const inP = outP / (curr.data.efficiency || 1);
+            
+            curr.data.calcInCurrent = inP / inV;
             curr.data.calcPower = inP - outP;
 
-            const parents = calcRevAdj.get(currId) || [];
-            if (parents.length > 0) {
-                const p = nodeMap.get(parents[0])!;
-                const pV = p.data.calcVoltage || (p.data as any).outVoltage || 1;
-                p.data.calcCurrent = (p.data.calcCurrent || 0) + (inP / pV);
-            }
-
-            if (curr.data.maxOutCurrent !== undefined && curr.data.maxOutCurrent > 0 && (curr.data.calcCurrent || 0) > curr.data.maxOutCurrent) {
-                curr.data.error = `Over-current: ${(curr.data.calcCurrent || 0).toFixed(1)}A > ${curr.data.maxOutCurrent}A`;
+            if (curr.data.maxOutCurrent !== undefined && curr.data.maxOutCurrent > 0) {
+                if (totalOutCurrent > curr.data.maxOutCurrent) {
+                    curr.data.error = `Over-current: ${totalOutCurrent.toFixed(1)}A > ${curr.data.maxOutCurrent}A`;
+                } else if (totalOutCurrent > curr.data.maxOutCurrent * 0.9) {
+                    curr.data.warning = `High Load: ${totalOutCurrent.toFixed(1)}A (Max ${curr.data.maxOutCurrent}A)`;
+                }
             }
         } else if (curr.data.type === 'loadSwitch') {
-            let outCurrent = 0;
-            (calcAdj.get(currId) || []).forEach(cid => outCurrent += nodeMap.get(cid)!.data.calcCurrent || 0);
-            curr.data.calcCurrent = outCurrent;
-
+            curr.data.calcInCurrent = totalOutCurrent;
             const rOnOhms = (curr.data.rOn || 0) / 1000;
-            const vDrop = outCurrent * rOnOhms;
-            curr.data.calcPower = outCurrent * outCurrent * rOnOhms;
+            const vDrop = totalOutCurrent * rOnOhms;
+            curr.data.calcPower = totalOutCurrent * totalOutCurrent * rOnOhms;
 
             if (curr.data.calcVoltage !== undefined) {
                 curr.data.calcVoltage = Math.max(0, curr.data.calcVoltage - vDrop);
             }
 
-            const parents = calcRevAdj.get(currId) || [];
-            if (parents.length > 0) {
-                const p = nodeMap.get(parents[0])!;
-                p.data.calcCurrent = (p.data.calcCurrent || 0) + outCurrent;
-            }
-
-            if (curr.data.maxCurrent !== undefined && curr.data.maxCurrent > 0 && outCurrent > curr.data.maxCurrent) {
-                curr.data.error = (curr.data.error ? curr.data.error + ' | ' : '') + `Over-current: ${outCurrent.toFixed(1)}A > ${curr.data.maxCurrent}A`;
+            if (curr.data.maxCurrent !== undefined && curr.data.maxCurrent > 0) {
+                if (totalOutCurrent > curr.data.maxCurrent) {
+                    curr.data.error = (curr.data.error ? curr.data.error + ' | ' : '') + `Over-current: ${totalOutCurrent.toFixed(1)}A > ${curr.data.maxCurrent}A`;
+                }
             }
         } else if (curr.data.type === 'muxSwitch') {
-            let outCurrent = 0;
-            (calcAdj.get(currId) || []).forEach(cid => outCurrent += nodeMap.get(cid)!.data.calcCurrent || 0);
-            curr.data.calcCurrent = outCurrent;
-
-            const parents = calcRevAdj.get(currId) || [];
-            if (parents.length > 0) {
-                const perParentCurrent = outCurrent / parents.length;
-                parents.forEach(pid => {
-                    const p = nodeMap.get(pid)!;
-                    p.data.calcCurrent = (p.data.calcCurrent || 0) + perParentCurrent;
-                });
-            }
+            curr.data.calcInCurrent = totalOutCurrent;
+            // No significant loss or voltage drop for MuxSwitch in this model currently
         } else if (curr.data.type === 'powerSource') {
-            curr.data.calcPower = curr.data.outVoltage * (curr.data.calcCurrent || 0);
-            if ((curr.data.calcCurrent || 0) > curr.data.maxCurrent) {
-                curr.data.error = `Over-current: ${curr.data.calcCurrent?.toFixed(1)}A > ${curr.data.maxCurrent}A`;
+            curr.data.calcInCurrent = 0; // Source doesn't "draw" from anything in this tree
+            curr.data.calcPower = curr.data.outVoltage * totalOutCurrent;
+            if (totalOutCurrent > curr.data.maxCurrent) {
+                curr.data.error = `Over-current: ${totalOutCurrent.toFixed(1)}A > ${curr.data.maxCurrent}A`;
+            } else if (totalOutCurrent > curr.data.maxCurrent * 0.9) {
+                curr.data.warning = `High Load: ${totalOutCurrent.toFixed(1)}A (Max ${curr.data.maxCurrent}A)`;
             }
         }
 
+        // Move to parents
         (calcRevAdj.get(currId) || []).forEach(pid => {
             inDegree.set(pid, (inDegree.get(pid) || 1) - 1);
             if (inDegree.get(pid) === 0) backQueue.push(pid);

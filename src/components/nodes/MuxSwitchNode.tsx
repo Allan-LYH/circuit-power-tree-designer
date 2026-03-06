@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps, useUpdateNodeInternals } from '@xyflo
 import { usePowerTreeStore } from '../../stores/usePowerTreeStore';
 import { useShallow } from 'zustand/react/shallow';
 import type { PowerNode, MuxSwitchData } from '../../types/node.types';
-import { GitMerge, AlertCircle, Settings2, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { GitMerge, AlertCircle, AlertTriangle, Settings2, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 
 import { NodeInput } from '../NodeInput';
 
@@ -54,7 +54,9 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
     if (viewMode === 'readonly') {
         return (
             <div className={`w-[280px] rounded-lg border p-1.5 shadow-sm transition-all flex items-center gap-2 ${
-                theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-400'
+                data.error ? 'border-red-500 bg-red-500/5' : 
+                data.warning ? 'border-amber-500 bg-amber-500/5' :
+                (theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-400')
             }`}>
                 {/* Simplified Handles for Readonly */}
                 <Handle type="target" id="ctrl" position={Position.Top} className="!w-2 !h-1 !bg-indigo-500 !border-none !rounded-none" />
@@ -113,14 +115,14 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
     return (
         <div className={`w-[280px] rounded-xl border-2 p-2 shadow-xl transition-all flex flex-col gap-2 ${
             theme === 'dark' ? 'bg-zinc-900 shadow-black/40' : 'bg-white shadow-zinc-200/50'
-        } ${selected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : data.error ? 'border-red-500' : (theme === 'dark' ? 'border-zinc-800' : 'border-zinc-400')}`}>
+        } ${selected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : data.error ? 'border-red-500' : data.warning ? 'border-amber-500 shadow-amber-500/10' : (theme === 'dark' ? 'border-zinc-800' : 'border-zinc-400')}`}>
 
             {/* Control Input Handle */}
             <Handle
                 type="target"
                 id="ctrl"
                 position={Position.Top}
-                className={`!h-3 !w-6 border-2 border-indigo-400 rounded-sm hover:scale-110 transition-transform cursor-crosshair ${
+                className={`!h-3 !w-6 border-2 border-indigo-400 rounded-sm cursor-crosshair ${
                     theme === 'dark' ? '!bg-zinc-800' : '!bg-white'
                 }`}
             />
@@ -141,7 +143,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                             }
                         }}
                         style={{ top: `${((i + 1) * 100) / (inPorts + 1)}%` }}
-                        className={`!h-4 !w-4 !border-[3px] rounded-full hover:scale-125 transition-all cursor-pointer ${
+                        className={`!h-4 !w-4 !border-[3px] rounded-full cursor-pointer ${
                             isDisabled 
                                 ? '!border-zinc-500 !bg-zinc-400 opacity-50' 
                                 : '!border-indigo-500 ' + (theme === 'dark' ? '!bg-zinc-900' : '!bg-white shadow-sm')
@@ -167,7 +169,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                             }
                         }}
                         style={{ top: `${((i + 1) * 100) / (outPorts + 1)}%` }}
-                        className={`!h-4 !w-4 !border-[3px] rounded-full hover:scale-125 transition-all cursor-pointer ${
+                        className={`!h-4 !w-4 !border-[3px] rounded-full cursor-pointer ${
                             isDisabled 
                                 ? '!border-zinc-500 !bg-zinc-400 opacity-50' 
                                 : '!border-indigo-500 ' + (theme === 'dark' ? '!bg-zinc-900' : '!bg-white shadow-sm')
@@ -177,7 +179,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                 );
             })}
 
-            <div className={`flex items-center gap-2 ${viewMode === 'compact' ? 'pb-0' : `border-b pb-2 ${theme === 'dark' ? 'border-zinc-800/80' : 'border-zinc-100'}`}`}>
+            <div className={`flex items-center gap-2 ${viewMode === 'full' ? `border-b pb-2 ${theme === 'dark' ? 'border-zinc-800/80' : 'border-zinc-100'}` : 'pb-0'}`}>
                 <div className={`flex h-8 w-8 items-center justify-center rounded-md border ${
                     theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400 border-indigo-500/20' : 'bg-indigo-50 text-indigo-600 border-indigo-100'
                 }`}>
@@ -208,7 +210,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
 
             <div className="grid grid-cols-2 gap-2">
                 <div className={`rounded-md px-2 py-1.5 border shadow-inner flex flex-col justify-between ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-zinc-50 border-zinc-100'}`}>
-                    {viewMode !== 'compact' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>IN Ports</p>}
+                    {viewMode === 'full' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>IN Ports</p>}
                     <div className="flex items-baseline justify-end">
                         <NodeInput
                             value={data.inPorts || 1}
@@ -220,7 +222,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                     </div>
                 </div>
                 <div className={`rounded-md px-2 py-1.5 border shadow-inner flex flex-col justify-between ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-zinc-50 border-zinc-100'}`}>
-                    {viewMode !== 'compact' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>OUT Ports</p>}
+                    {viewMode === 'full' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>OUT Ports</p>}
                     <div className="flex items-baseline justify-end">
                         <NodeInput
                             value={data.outPorts || 1}
@@ -232,7 +234,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                     </div>
                 </div>
 
-                {viewMode !== 'compact' && (
+                {viewMode === 'full' && (
                     <div className={`col-span-2 grid grid-cols-[1fr_auto_1fr] items-center rounded-md px-2 py-1.5 border shadow-inner mt-0.5 ${theme === 'dark' ? 'bg-zinc-950/80 border-zinc-800/80' : 'bg-zinc-100/50 border-zinc-200/50'}`}>
                         <div className="flex items-baseline justify-between w-full overflow-hidden gap-1">
                             <p className={`text-[10px] font-bold uppercase whitespace-nowrap ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>V_PASS (~):</p>
@@ -250,7 +252,7 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                 )}
             </div>
 
-            {((viewMode === 'full' && data.showControlLogic && data.controlInterface) || (viewMode !== 'compact' && data.error)) && (
+            {( (viewMode === 'full' && data.showControlLogic && data.controlInterface) || data.error || data.warning) && (
                 <div className="flex flex-col gap-2">
                     {viewMode === 'full' && data.showControlLogic && data.controlInterface && (
                         <div className={`flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-md border uppercase tracking-wider ${
@@ -266,6 +268,12 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                         }`}>
                             <AlertCircle size={12} className="shrink-0 mt-0.5" />
                             <span>{data.error}</span>
+                        </div>
+                    )}
+                    {!data.error && data.warning && (
+                        <div className={`flex items-start gap-2 text-[10px] font-semibold p-2 rounded-md border ${theme === 'dark' ? 'text-amber-100 bg-amber-500/20 border-amber-500/30' : 'text-amber-800 bg-amber-50 border-amber-100'}`}>
+                            <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                            <span>{data.warning}</span>
                         </div>
                     )}
                 </div>

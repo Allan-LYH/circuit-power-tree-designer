@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { usePowerTreeStore } from '../../stores/usePowerTreeStore';
 import { useShallow } from 'zustand/react/shallow';
 import type { PowerNode, PowerSourceData } from '../../types/node.types';
-import { Zap, AlertCircle, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { Zap, AlertCircle, AlertTriangle, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 
 import { NodeInput } from '../NodeInput';
 
@@ -28,7 +28,9 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
     if (viewMode === 'readonly') {
         return (
             <div className={`w-[280px] rounded-lg border p-1.5 shadow-sm transition-all flex items-center gap-2 ${
-                theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-400'
+                data.error ? 'border-red-500 bg-red-500/5' : 
+                data.warning ? 'border-amber-500 bg-amber-500/5' : 
+                (theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-400')
             }`}>
                 <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded bg-emerald-500/10 text-emerald-500`}>
                     <Zap size={16} />
@@ -44,7 +46,11 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
                     <div className="w-px h-3 bg-zinc-700/30" />
                     <div className="flex items-baseline">
                         <span className={`text-base font-bold ${
-                            (data.calcCurrent || 0) > data.maxCurrent ? 'text-red-500' : (theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700')
+                            (data.calcCurrent || 0) > data.maxCurrent 
+                                ? 'text-red-500' 
+                                : (data.calcCurrent || 0) > data.maxCurrent * 0.9 
+                                    ? 'text-amber-500' 
+                                    : (theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700')
                         }`}>
                             {(data.calcCurrent || 0).toFixed(1)}
                         </span>
@@ -63,7 +69,7 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
     return (
         <div className={`w-[280px] rounded-xl border-2 p-2 shadow-xl transition-all flex flex-col gap-2 ${
             theme === 'dark' ? 'bg-zinc-900 shadow-black/40' : 'bg-white shadow-zinc-200/50'
-        } ${selected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : data.error ? 'border-red-500' : (theme === 'dark' ? 'border-zinc-800' : 'border-zinc-400')}`}>
+        } ${selected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : data.error ? 'border-red-500' : data.warning ? 'border-amber-500 shadow-amber-500/10' : (theme === 'dark' ? 'border-zinc-800' : 'border-zinc-400')}`}>
             <div className={`flex items-center gap-2 ${viewMode === 'compact' ? 'pb-0' : `border-b pb-2 ${theme === 'dark' ? 'border-zinc-800/80' : 'border-zinc-100'}`}`}>
                 <div className={`flex h-8 w-8 items-center justify-center rounded-md border ${
                     theme === 'dark' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-emerald-50 text-emerald-600 border-emerald-100'
@@ -90,7 +96,7 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
 
             <div className="grid grid-cols-2 gap-2">
                 <div className={`rounded-md px-2 py-1.5 border shadow-inner flex flex-col justify-between ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-zinc-50 border-zinc-100'}`}>
-                    {viewMode !== 'compact' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Set V_OUT</p>}
+                    {viewMode === 'full' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Set V_OUT</p>}
                     <div className="flex items-baseline justify-end">
                         <NodeInput
                             value={data.outVoltage}
@@ -102,7 +108,7 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
                     </div>
                 </div>
                 <div className={`rounded-md px-2 py-1.5 border shadow-inner flex flex-col justify-between ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-zinc-50 border-zinc-100'}`}>
-                    {viewMode !== 'compact' && (
+                    {viewMode === 'full' && (
                         <div className="flex justify-between items-center mb-1">
                             <p className={`text-[10px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Sys Load</p>
                             <p className={`text-[9px] font-bold uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-400'}`}>/ Max</p>
@@ -112,7 +118,9 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
                         <span className={`text-base font-bold font-mono tracking-tight mr-1 ${
                             (data.calcCurrent || 0) > data.maxCurrent 
                                 ? 'text-red-500' 
-                                : (theme === 'dark' ? 'text-emerald-100/80' : 'text-zinc-900')
+                                : (data.calcCurrent || 0) > data.maxCurrent * 0.9 
+                                    ? 'text-amber-500' 
+                                    : (theme === 'dark' ? 'text-emerald-100/80' : 'text-zinc-900')
                         }`}>
                             {(data.calcCurrent || 0).toFixed(2)}
                         </span>
@@ -128,7 +136,7 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
                         <span className={`text-[10px] font-bold ml-0.5 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>A</span>
                     </div>
                 </div>
-                {viewMode !== 'compact' && (
+                {viewMode === 'full' && (
                     <div className={`col-span-2 flex justify-between items-center rounded-md px-2 py-1.5 border shadow-inner mt-0.5 h-[34px] ${theme === 'dark' ? 'bg-zinc-950/80 border-zinc-800/80' : 'bg-zinc-100/50 border-zinc-200/50'}`}>
                         <p className={`text-[10px] font-bold uppercase whitespace-nowrap ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Total Power Output:</p>
                         <div className="flex items-baseline whitespace-nowrap">
@@ -139,17 +147,23 @@ export default function PowerSourceNode({ id, data, selected }: NodeProps<PowerN
                 )}
             </div>
 
-            {viewMode !== 'compact' && data.error && (
+            {viewMode === 'full' && data.error && (
                 <div className={`flex items-start gap-2 text-[10px] font-semibold p-2 rounded-md border ${theme === 'dark' ? 'text-red-100 bg-red-500/20 border-red-500/30' : 'text-red-800 bg-red-50 border-red-100'}`}>
                     <AlertCircle size={12} className="shrink-0 mt-0.5" />
                     <span>{data.error}</span>
+                </div>
+            )}
+            {viewMode === 'full' && !data.error && data.warning && (
+                <div className={`flex items-start gap-2 text-[10px] font-semibold p-2 rounded-md border ${theme === 'dark' ? 'text-amber-100 bg-amber-500/20 border-amber-500/30' : 'text-amber-800 bg-amber-50 border-amber-100'}`}>
+                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                    <span>{data.warning}</span>
                 </div>
             )}
 
             <Handle
                 type="source"
                 position={Position.Right}
-                className={`!h-5 !w-5 !border-[3px] rounded-full hover:scale-125 transition-all cursor-crosshair relative before:content-[''] before:absolute before:inset-[-12px] before:rounded-full before:bg-transparent ${
+                className={`!h-5 !w-5 !border-[3px] rounded-full cursor-crosshair relative before:content-[''] before:absolute before:inset-[-12px] before:rounded-full before:bg-transparent ${
                     theme === 'dark' ? '!bg-zinc-900 !border-emerald-500' : '!bg-white !border-emerald-500 shadow-md'
                 }`}
             />

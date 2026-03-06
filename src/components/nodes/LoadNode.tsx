@@ -3,7 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { usePowerTreeStore } from '../../stores/usePowerTreeStore';
 import { useShallow } from 'zustand/react/shallow';
 import type { PowerNode, LoadData } from '../../types/node.types';
-import { MemoryStick, AlertCircle, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
+import { MemoryStick, AlertCircle, AlertTriangle, ChevronUp, ChevronDown, Trash2 } from 'lucide-react';
 
 import { NodeInput } from '../NodeInput';
 
@@ -28,7 +28,9 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
     if (viewMode === 'readonly') {
         return (
             <div className={`w-[280px] rounded-lg border p-1.5 shadow-sm transition-all flex items-center gap-2 ${
-                theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-400'
+                data.error ? 'border-red-500 bg-red-500/5' : 
+                data.warning ? 'border-amber-500 bg-amber-500/5' : 
+                (theme === 'dark' ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-400')
             }`}>
                 <Handle
                     type="target"
@@ -46,7 +48,9 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
                         <span className={`text-base font-black ${
                             Math.abs((data.calcVoltage || 0) - data.reqVoltage) > 0.1 
                                 ? 'text-red-500' 
-                                : (theme === 'dark' ? 'text-amber-400' : 'text-amber-600')
+                                : data.warning && data.warning.includes('Vin') 
+                                    ? 'text-amber-500' 
+                                    : (theme === 'dark' ? 'text-amber-400' : 'text-amber-600')
                         }`}>{data.reqVoltage}</span>
                         <span className="text-[10px] font-bold ml-0.5 opacity-50">V</span>
                     </div>
@@ -63,11 +67,11 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
     return (
         <div className={`w-[280px] rounded-xl border-2 p-2 shadow-xl transition-all flex flex-col gap-2 ${
             theme === 'dark' ? 'bg-zinc-900 shadow-black/40' : 'bg-white shadow-zinc-200/50'
-        } ${selected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : data.error ? 'border-red-500' : (theme === 'dark' ? 'border-zinc-800' : 'border-zinc-400')}`}>
+        } ${selected ? 'border-indigo-500 ring-2 ring-indigo-500/20' : data.error ? 'border-red-500' : data.warning ? 'border-amber-500 shadow-amber-500/10' : (theme === 'dark' ? 'border-zinc-800' : 'border-zinc-400')}`}>
             <Handle
                 type="target"
                 position={Position.Left}
-                className={`!h-5 !w-5 !border-[3px] rounded-full hover:scale-125 transition-all cursor-crosshair relative before:content-[''] before:absolute before:inset-[-12px] before:rounded-full before:bg-transparent ${
+                className={`!h-5 !w-5 !border-[3px] rounded-full cursor-crosshair relative before:content-[''] before:absolute before:inset-[-12px] before:rounded-full before:bg-transparent ${
                     theme === 'dark' ? '!bg-zinc-900 !border-amber-500' : '!bg-white !border-amber-500 shadow-sm'
                 }`}
             />
@@ -98,9 +102,9 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
 
             <div className="flex gap-2">
                 <div className={`flex-1 rounded-md px-2 py-1.5 border shadow-inner flex flex-col justify-between ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-zinc-50 border-zinc-100'}`}>
-                    {viewMode !== 'compact' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Set REQ_V</p>}
+                    {viewMode === 'full' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Set REQ_V</p>}
                     <div className={`flex items-baseline ${viewMode === 'compact' ? 'justify-end' : 'justify-between'}`}>
-                        {viewMode !== 'compact' && <span className={`text-[10px] font-semibold ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-400'}`}>{data.calcVoltage?.toFixed(1) || '?'}V</span>}
+                        {viewMode === 'full' && <span className={`text-[10px] font-semibold ${theme === 'dark' ? 'text-zinc-600' : 'text-zinc-400'}`}>{data.calcVoltage?.toFixed(1) || '?'}V</span>}
                         <div className="flex items-baseline">
                             <NodeInput
                                 value={data.reqVoltage}
@@ -117,7 +121,7 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
                     </div>
                 </div>
                 <div className={`flex-1 rounded-md px-2 py-1.5 border shadow-inner flex flex-col justify-between ${theme === 'dark' ? 'bg-zinc-950/60 border-zinc-800/60' : 'bg-zinc-50 border-zinc-100'}`}>
-                    {viewMode !== 'compact' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Set Demand</p>}
+                    {viewMode === 'full' && <p className={`text-[10px] font-bold mb-1 uppercase tracking-wider ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Set Demand</p>}
                     <div className="flex items-baseline justify-end">
                         <NodeInput
                             value={data.reqCurrent}
@@ -132,7 +136,7 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
                 </div>
             </div>
 
-            {viewMode !== 'compact' && (
+            {viewMode === 'full' && (
                 <div className={`grid grid-cols-[1fr_auto_1fr] items-center rounded-md px-2 py-1.5 border shadow-inner mt-0.5 h-[34px] ${theme === 'dark' ? 'bg-zinc-950/80 border-zinc-800/80' : 'bg-zinc-100/50 border-zinc-200/50'}`}>
                     <div className="flex items-baseline justify-between w-full overflow-hidden gap-1">
                         <p className={`text-[10px] font-bold uppercase whitespace-nowrap ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`}>Status:</p>
@@ -149,12 +153,16 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
                 </div>
             )}
 
-            {viewMode !== 'compact' && data.error && (
-                <div className={`flex items-start gap-2 text-[10px] font-bold p-2 rounded-md border ${
-                    theme === 'dark' ? 'text-red-100 bg-red-500/20 border-red-500/30' : 'text-red-800 bg-red-50 border-red-100'
-                }`}>
+            {viewMode === 'full' && data.error && (
+                <div className={`flex items-start gap-2 text-[10px] font-semibold p-2 rounded-md border ${theme === 'dark' ? 'text-red-100 bg-red-500/20 border-red-500/30' : 'text-red-800 bg-red-50 border-red-100'}`}>
                     <AlertCircle size={12} className="shrink-0 mt-0.5" />
                     <span>{data.error}</span>
+                </div>
+            )}
+            {viewMode === 'full' && !data.error && data.warning && (
+                <div className={`flex items-start gap-2 text-[10px] font-semibold p-2 rounded-md border ${theme === 'dark' ? 'text-amber-100 bg-amber-500/20 border-amber-500/30' : 'text-amber-800 bg-amber-50 border-amber-100'}`}>
+                    <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                    <span>{data.warning}</span>
                 </div>
             )}
         </div>

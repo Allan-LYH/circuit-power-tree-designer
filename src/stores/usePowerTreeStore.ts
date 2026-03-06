@@ -165,8 +165,9 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
                 Type: d.type,
                 InputVoltage: d.type === 'powerSource' ? '-' : (d.calcVoltage?.toFixed(2) || 'N/A'),
                 OutputVoltage: (d as any).outVoltage !== undefined ? (d as any).outVoltage : (d.calcVoltage?.toFixed(2) || '-'),
-                Current: d.calcCurrent?.toFixed(3) || '0.000',
-                Power: d.calcPower?.toFixed(3) || '0.000',
+                InputCurrent: d.calcInCurrent?.toFixed(3) || '0.000',
+                OutputCurrent: d.calcCurrent?.toFixed(3) || '0.000',
+                PowerLoss: d.calcPower?.toFixed(3) || '0.000',
                 Status: d.error ? `Error: ${d.error}` : 'OK'
             };
         });
