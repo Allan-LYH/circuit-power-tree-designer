@@ -87,20 +87,20 @@ export default function MuxSwitchNode({ id, data, selected }: NodeProps<PowerNod
                     );
                 })}
 
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded bg-indigo-500/10 text-indigo-500`}>
-                    <GitMerge size={14} />
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded bg-indigo-500/10 text-indigo-500`}>
+                    <GitMerge size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h3 className={`font-bold text-xs truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
+                    <h3 className={`font-bold text-sm truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-baseline">
-                        <span className={`text-xs font-black ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>{inPorts}:{outPorts}</span>
+                        <span className={`text-base font-black ${theme === 'dark' ? 'text-indigo-400' : 'text-indigo-600'}`}>{inPorts}:{outPorts}</span>
                         <span className="text-[10px] font-bold ml-0.5 opacity-50">CH</span>
                     </div>
                     <div className="w-px h-3 bg-zinc-700/30" />
                     <div className="flex items-baseline">
-                        <span className={`text-xs font-bold ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
+                        <span className={`text-base font-bold ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>
                             {(data.calcCurrent || 0).toFixed(1)}
                         </span>
                         <span className="text-[10px] font-bold ml-0.5 opacity-50">A</span>

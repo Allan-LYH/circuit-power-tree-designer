@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { 
   ReactFlow, Controls, Panel, ReactFlowProvider, 
-  ConnectionLineType, getNodesBounds, getViewportForBounds 
+  ConnectionLineType, getNodesBounds, getViewportForBounds,
+  useReactFlow
 } from '@xyflow/react';
 import { usePowerTreeStore } from './stores/usePowerTreeStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -74,6 +75,7 @@ function FlowApp() {
         setShowControlFlow: state.setShowControlFlow
     })));
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { fitView } = useReactFlow();
 
   // Initial calculation and layout
   useEffect(() => {
@@ -235,6 +237,10 @@ function FlowApp() {
         const content = e.target?.result as string;
         if (content) {
           importProject(content);
+          // Auto-fit view after import
+          setTimeout(() => {
+            fitView({ duration: 800, padding: 0.2 });
+          }, 100);
         }
       };
       reader.readAsText(file);

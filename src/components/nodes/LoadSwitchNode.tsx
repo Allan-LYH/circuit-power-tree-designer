@@ -35,20 +35,20 @@ export default function LoadSwitchNode({ id, data, selected }: NodeProps<PowerNo
                     position={Position.Left}
                     className="!w-2 !h-2 !bg-fuchsia-500 !border-none"
                 />
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded bg-fuchsia-500/10 text-fuchsia-500`}>
-                    <ToggleRight size={14} />
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded bg-fuchsia-500/10 text-fuchsia-500`}>
+                    <ToggleRight size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h3 className={`font-bold text-xs truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
+                    <h3 className={`font-bold text-sm truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-baseline">
-                        <span className={`text-xs font-black ${theme === 'dark' ? 'text-fuchsia-400' : 'text-fuchsia-600'}`}>{data.rOn}</span>
+                        <span className={`text-base font-black ${theme === 'dark' ? 'text-fuchsia-400' : 'text-fuchsia-600'}`}>{data.rOn}</span>
                         <span className="text-[10px] font-bold ml-0.5 opacity-50">mΩ</span>
                     </div>
                     <div className="w-px h-3 bg-zinc-700/30" />
                     <div className="flex items-baseline">
-                        <span className={`text-xs font-bold ${
+                        <span className={`text-base font-bold ${
                             (data.maxCurrent && (data.calcCurrent || 0) > data.maxCurrent) ? 'text-red-500' : (theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700')
                         }`}>
                             {(data.calcCurrent || 0).toFixed(1)}

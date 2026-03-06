@@ -36,20 +36,20 @@ export default function ConverterNode({ id, data, selected }: NodeProps<PowerNod
           position={Position.Left}
           className="!w-2 !h-2 !bg-sky-500 !border-none"
         />
-        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded bg-sky-500/10 text-sky-500`}>
-          <Cpu size={14} />
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded bg-sky-500/10 text-sky-500`}>
+          <Cpu size={16} />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className={`font-bold text-xs truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
+          <h3 className={`font-bold text-sm truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex items-baseline">
-            <span className={`text-xs font-black ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>{data.outVoltage}</span>
+            <span className={`text-base font-black ${theme === 'dark' ? 'text-sky-400' : 'text-sky-600'}`}>{data.outVoltage}</span>
             <span className="text-[10px] font-bold ml-0.5 opacity-50">V</span>
           </div>
           <div className="w-px h-3 bg-zinc-700/30" />
           <div className="flex items-baseline">
-            <span className={`text-xs font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{(data.efficiency * 100).toFixed(0)}</span>
+            <span className={`text-base font-bold ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}>{(data.efficiency * 100).toFixed(0)}</span>
             <span className="text-[10px] font-bold ml-0.5 opacity-50">%</span>
           </div>
         </div>

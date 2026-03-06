@@ -35,15 +35,15 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
                     position={Position.Left}
                     className="!w-2 !h-2 !bg-amber-500 !border-none"
                 />
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded bg-amber-500/10 text-amber-500`}>
-                    <MemoryStick size={14} />
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded bg-amber-500/10 text-amber-500`}>
+                    <MemoryStick size={16} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h3 className={`font-bold text-xs truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
+                    <h3 className={`font-bold text-sm truncate leading-none ${theme === 'dark' ? 'text-zinc-100' : 'text-zinc-900'}`}>{data.label}</h3>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-baseline">
-                        <span className={`text-xs font-black ${
+                        <span className={`text-base font-black ${
                             Math.abs((data.calcVoltage || 0) - data.reqVoltage) > 0.1 
                                 ? 'text-red-500' 
                                 : (theme === 'dark' ? 'text-amber-400' : 'text-amber-600')
@@ -52,7 +52,7 @@ export default function LoadNode({ id, data, selected }: NodeProps<PowerNode & {
                     </div>
                     <div className="w-px h-3 bg-zinc-700/30" />
                     <div className="flex items-baseline">
-                        <span className={`text-xs font-bold ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>{data.reqCurrent}</span>
+                        <span className={`text-base font-bold ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700'}`}>{data.reqCurrent}</span>
                         <span className="text-[10px] font-bold ml-0.5 opacity-50">A</span>
                     </div>
                 </div>
