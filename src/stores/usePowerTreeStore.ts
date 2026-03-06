@@ -3,7 +3,6 @@ import {
     type Connection,
     type Edge,
     type EdgeChange,
-    type Node as RFNode,
     type NodeChange,
     addEdge,
     type OnNodesChange,
@@ -14,65 +13,16 @@ import {
 } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
 
-export type NodeType = 'powerSource' | 'converter' | 'load' | 'loadSwitch' | 'muxSwitch';
-
-export interface BaseNodeData extends Record<string, unknown> {
-    label: string;
-    type: NodeType;
-    calcVoltage?: number;
-    calcCurrent?: number;
-    calcPower?: number;
-    error?: string;
-    showControlLogic?: boolean;
-    level: number;
-    verticalIndex: number;
-}
-
-export interface PowerSourceData extends BaseNodeData {
-    type: 'powerSource';
-    outVoltage: number;
-    maxCurrent: number;
-}
-
-export interface ConverterData extends BaseNodeData {
-    type: 'converter';
-    outVoltage: number;
-    efficiency: number;
-    controlInterface: string;
-    minInVoltage?: number;
-    maxInVoltage?: number;
-    maxOutCurrent?: number;
-}
-
-export interface LoadData extends BaseNodeData {
-    type: 'load';
-    reqVoltage: number;
-    reqCurrent: number;
-    minInVoltage?: number;
-    maxInVoltage?: number;
-}
-
-export interface LoadSwitchData extends BaseNodeData {
-    type: 'loadSwitch';
-    rOn: number; // in mOhms
-    maxCurrent: number;
-    controlInterface: string;
-    minInVoltage?: number;
-    maxInVoltage?: number;
-}
-
-export interface MuxSwitchData extends BaseNodeData {
-    type: 'muxSwitch';
-    inPorts: number;
-    outPorts: number;
-    controlInterface: string;
-}
-
-export type PowerNodeData = PowerSourceData | ConverterData | LoadData | LoadSwitchData | MuxSwitchData;
-export type PowerNode = RFNode<PowerNodeData>;
-
-export type ViewMode = 'full' | 'compact' | 'power_only';
-export type EdgeStyle = 'bezier' | 'step';
+import type {
+    NodeType,
+    PowerNodeData,
+    PowerNode,
+    ViewMode,
+    EdgeStyle,
+    MuxSwitchData
+} from '../types/node.types';
+import { getLayoutMetrics } from '../core/layout.utils';
+import { calculatePowerTree, applyAutoLayout } from '../core/engine';
 
 interface PowerTreeState {
     viewMode: ViewMode;
@@ -81,6 +31,8 @@ interface PowerTreeState {
     setEdgeStyle: (style: EdgeStyle) => void;
     autoLayout: boolean;
     setAutoLayout: (enabled: boolean) => void;
+    showControlFlow: boolean;
+    setShowControlFlow: (enabled: boolean) => void;
     nodes: PowerNode[];
     edges: Edge[];
     onNodesChange: OnNodesChange<PowerNode>;
@@ -91,78 +43,41 @@ interface PowerTreeState {
     updateNodeData: (id: string, data: Partial<PowerNodeData>) => void;
     moveNodeVertical: (id: string, direction: 'up' | 'down') => void;
     removeEdge: (id: string) => void;
-    /** Recalculates all topological levels, voltages, currents, and power metrics */
     calculateTree: () => void;
-    /** Triggers the grid auto-layout engine to reposition nodes based on their levels */
     applyLayout: () => void;
-    /** Serializes the current project state (nodes, edges, settings) to a JSON string */
     exportProject: () => string;
-    /** Parses a JSON string to restore project state, overwriting current canvas */
     importProject: (jsonString: string) => void;
-    /** Holds the data of the currently copied node for the copy/paste functionality */
     clipboard: Partial<PowerNodeData> | null;
-    /** Copies the numerical/settings parameters (excluding ID/structural data) of a node to clipboard */
     copyNodeData: (id: string) => void;
-    /** Pastes the clipboard settings to the target node, enforcing type matching */
     pasteNodeData: (id: string) => void;
+    undoStack: string[];
+    redoStack: string[];
+    undo: () => void;
+    redo: () => void;
+    resetCanvas: () => void;
+    takeSnapshot: () => void;
+    getReportData: () => any[];
+    theme: 'light' | 'dark';
+    setTheme: (theme: 'light' | 'dark') => void;
 }
 
-/**
- * The layout engine dynamically accesses these to allow different spacing per viewing mode.
- */
-export const LAYOUT_CONSTANTS = {
-    NODE_WIDTH: 280,
-    NODE_HEIGHT_FULL: 150,     // Approximate height of a fully expanded node
-    NODE_HEIGHT_COMPACT: 98,   // Exact calculated height of a compact node (2+8+32+8+38+8+2)
-    HORIZONTAL_GAP: 80,        // 80 / 2 = 40px step connector distance
-    VERTICAL_GAP_FULL: 40,     // Matches horizontal step connector distance
-    VERTICAL_GAP_COMPACT: 12,  // Matches rounded-xl border radius
-};
-
-const getLayoutMetrics = (mode: ViewMode) => {
-    const columnWidth = LAYOUT_CONSTANTS.NODE_WIDTH + LAYOUT_CONSTANTS.HORIZONTAL_GAP;
-    switch (mode) {
-        case 'compact':
-            return {
-                columnWidth,
-                rowHeight: LAYOUT_CONSTANTS.NODE_HEIGHT_COMPACT + LAYOUT_CONSTANTS.VERTICAL_GAP_COMPACT
-            };
-        case 'power_only':
-            return {
-                columnWidth,
-                rowHeight: LAYOUT_CONSTANTS.NODE_HEIGHT_FULL + LAYOUT_CONSTANTS.VERTICAL_GAP_FULL
-            };
-        case 'full':
-        default:
-            return {
-                columnWidth,
-                rowHeight: LAYOUT_CONSTANTS.NODE_HEIGHT_FULL + LAYOUT_CONSTANTS.VERTICAL_GAP_FULL
-            };
-    }
-};
-
-/**
- * The main Zustand store that drives the Circuit Power Tree Designer.
- * It manages the graph state (nodes, edges), view modes, layout engine, 
- * and the core calculation engine for power delivery metrics.
- */
 export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     viewMode: 'full',
     setViewMode: (mode: ViewMode) => {
         set({ viewMode: mode });
-        // Re-apply layout when mode changes since metrics might have changed
         get().applyLayout();
     },
-    edgeStyle: 'bezier',
+    edgeStyle: 'step',
     setEdgeStyle: (style: EdgeStyle) => {
         set({ edgeStyle: style });
-        // Update all existing edges
         const updatedEdges = get().edges.map(edge => ({
             ...edge,
             type: style === 'step' ? 'step' : 'default'
         }));
         set({ edges: updatedEdges });
     },
+    theme: 'light',
+    setTheme: (theme: 'light' | 'dark') => set({ theme }),
     autoLayout: true,
     setAutoLayout: (enabled: boolean) => {
         set({ autoLayout: enabled });
@@ -170,71 +85,8 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             get().applyLayout();
         }
     },
-
-    exportProject: () => {
-        const state = get();
-        const projectData = {
-            nodes: state.nodes,
-            edges: state.edges,
-            viewMode: state.viewMode,
-            edgeStyle: state.edgeStyle,
-            version: '1.0' // For future compatibility
-        };
-        return JSON.stringify(projectData, null, 2);
-    },
-
-    importProject: (jsonString: string) => {
-        try {
-            const data = JSON.parse(jsonString);
-            if (!data.nodes || !data.edges) {
-                throw new Error("Invalid project file: missing nodes or edges.");
-            }
-
-            // Apply loaded data
-            set({
-                nodes: data.nodes,
-                edges: data.edges,
-                viewMode: data.viewMode || 'full',
-                edgeStyle: data.edgeStyle || 'bezier',
-            });
-
-            // Recalculate tree safely after import
-            get().calculateTree();
-        } catch (error) {
-            console.error("Failed to import project:", error);
-            alert("Failed to import project. The file might be corrupted or invalid.");
-        }
-    },
-
-    clipboard: null,
-
-    copyNodeData: (id: string) => {
-        const node = get().nodes.find(n => n.id === id);
-        if (node) {
-            // Deep copy to break references, exclude calculated/structural fields
-            const dataToCopy = JSON.parse(JSON.stringify(node.data));
-            delete dataToCopy.label; // Optional: maybe don't copy the label so instances stay uniquely named
-            delete dataToCopy.level;
-            delete dataToCopy.verticalIndex;
-            delete dataToCopy.calcVoltage;
-            delete dataToCopy.calcCurrent;
-            delete dataToCopy.calcPower;
-            delete dataToCopy.error;
-            set({ clipboard: dataToCopy });
-        }
-    },
-
-    pasteNodeData: (id: string) => {
-        const clipboard = get().clipboard;
-        if (!clipboard) return;
-
-        const node = get().nodes.find(n => n.id === id);
-        if (node && node.data.type === clipboard.type) {
-            // Only merge if types match (e.g., don't paste Converter params into a PowerSource)
-            // Use updateNodeData to handle all the side-effects (like removing ports if MUX count goes down)
-            get().updateNodeData(id, clipboard);
-        }
-    },
+    showControlFlow: false,
+    setShowControlFlow: (enabled: boolean) => set({ showControlFlow: enabled }),
 
     nodes: [
         {
@@ -246,35 +98,147 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     ],
     edges: [],
 
-    onNodesChange: (changes: NodeChange<PowerNode>[]) => {
-        // Prevent manual dragging from updating position permanently
-        const cleanedChanges = changes.filter(c => c.type !== 'position');
+    undoStack: [],
+    redoStack: [],
 
+    takeSnapshot: () => {
+        const { nodes, edges } = get();
+        const snapshot = JSON.stringify({ nodes, edges });
+        set((state) => ({
+            undoStack: [...state.undoStack, snapshot].slice(-50),
+            redoStack: []
+        }));
+    },
+
+    undo: () => {
+        const { undoStack, nodes, edges } = get();
+        if (undoStack.length === 0) return;
+        const currentSnapshot = JSON.stringify({ nodes, edges });
+        const lastSnapshot = JSON.parse(undoStack[undoStack.length - 1]);
+        set((state) => ({
+            nodes: lastSnapshot.nodes,
+            edges: lastSnapshot.edges,
+            undoStack: state.undoStack.slice(0, -1),
+            redoStack: [currentSnapshot, ...state.redoStack]
+        }));
+        get().calculateTree();
+    },
+
+    redo: () => {
+        const { redoStack, nodes, edges } = get();
+        if (redoStack.length === 0) return;
+        const currentSnapshot = JSON.stringify({ nodes, edges });
+        const nextSnapshot = JSON.parse(redoStack[0]);
+        set((state) => ({
+            nodes: nextSnapshot.nodes,
+            edges: nextSnapshot.edges,
+            undoStack: [...state.undoStack, currentSnapshot],
+            redoStack: state.redoStack.slice(1)
+        }));
+        get().calculateTree();
+    },
+
+    resetCanvas: () => {
+        get().takeSnapshot();
         set({
-            nodes: applyNodeChanges(cleanedChanges, get().nodes),
+            nodes: [
+                {
+                    id: 's1',
+                    type: 'powerSource',
+                    position: { x: 0, y: 0 },
+                    data: { label: 'DC Input', type: 'powerSource', outVoltage: 12, maxCurrent: 10, level: 0, verticalIndex: 0 },
+                }
+            ],
+            edges: [],
+            undoStack: [],
+            redoStack: []
+        });
+        get().calculateTree();
+    },
+
+    getReportData: () => {
+        const { nodes } = get();
+        return nodes.map(node => {
+            const d = node.data;
+            return {
+                Label: d.label,
+                Type: d.type,
+                InputVoltage: d.type === 'powerSource' ? '-' : (d.calcVoltage?.toFixed(2) || 'N/A'),
+                OutputVoltage: (d as any).outVoltage !== undefined ? (d as any).outVoltage : (d.calcVoltage?.toFixed(2) || '-'),
+                Current: d.calcCurrent?.toFixed(3) || '0.000',
+                Power: d.calcPower?.toFixed(3) || '0.000',
+                Status: d.error ? `Error: ${d.error}` : 'OK'
+            };
         });
     },
 
+    exportProject: () => {
+        const { nodes, edges, viewMode, edgeStyle } = get();
+        return JSON.stringify({ nodes, edges, viewMode, edgeStyle, version: '1.0' }, null, 2);
+    },
+
+    importProject: (jsonString: string) => {
+        try {
+            const data = JSON.parse(jsonString);
+            if (!data.nodes || !data.edges) throw new Error("Invalid project file");
+            set({
+                nodes: data.nodes,
+                edges: data.edges,
+                viewMode: data.viewMode || 'full',
+                edgeStyle: data.edgeStyle || 'step',
+            });
+            get().calculateTree();
+        } catch (error) {
+            console.error("Failed to import project:", error);
+            alert("Failed to import project.");
+        }
+    },
+
+    clipboard: null,
+    copyNodeData: (id: string) => {
+        const node = get().nodes.find(n => n.id === id);
+        if (node) {
+            const dataToCopy = JSON.parse(JSON.stringify(node.data));
+            delete dataToCopy.level;
+            delete dataToCopy.verticalIndex;
+            delete dataToCopy.calcVoltage;
+            delete dataToCopy.calcCurrent;
+            delete dataToCopy.calcPower;
+            delete dataToCopy.error;
+            set({ clipboard: dataToCopy });
+        }
+    },
+    pasteNodeData: (id: string) => {
+        const clipboard = get().clipboard;
+        if (!clipboard) return;
+        const node = get().nodes.find(n => n.id === id);
+        if (node && node.data.type === clipboard.type) {
+            get().updateNodeData(id, clipboard);
+        }
+    },
+
+    onNodesChange: (changes: NodeChange<PowerNode>[]) => {
+        const cleanedChanges = changes.filter(c => c.type !== 'position');
+        if (cleanedChanges.some(c => c.type === 'remove')) get().takeSnapshot();
+        set({ nodes: applyNodeChanges(cleanedChanges, get().nodes) });
+    },
+
     onEdgesChange: (changes: EdgeChange[]) => {
-        set({
-            edges: applyEdgeChanges(changes, get().edges),
-        });
+        if (changes.some(c => c.type === 'remove')) get().takeSnapshot();
+        set({ edges: applyEdgeChanges(changes, get().edges) });
         get().calculateTree();
     },
 
     onConnect: (connection: Connection) => {
+        get().takeSnapshot();
         const edgeStyle = get().edgeStyle;
-        const newEdge = {
-            ...connection,
-            type: edgeStyle === 'step' ? 'step' : 'default',
-        };
-        set({
-            edges: addEdge(newEdge, get().edges),
-        });
+        const newEdge = { ...connection, type: edgeStyle === 'step' ? 'step' : 'default' };
+        set({ edges: addEdge(newEdge, get().edges) });
         get().calculateTree();
     },
 
     addNode: (type: NodeType) => {
+        get().takeSnapshot();
         const id = uuidv4();
         const newNode: PowerNode = {
             id,
@@ -289,7 +253,7 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
                 ...(type === 'converter' ? { outVoltage: 5, efficiency: 0.9, controlInterface: '', maxOutCurrent: 3 } : {}),
                 ...(type === 'load' ? { reqVoltage: 5, reqCurrent: 1 } : {}),
                 ...(type === 'loadSwitch' ? { rOn: 50, maxCurrent: 2, controlInterface: '' } : {}),
-                ...(type === 'muxSwitch' ? { inPorts: 2, outPorts: 1, controlInterface: 'SEL' } : {}),
+                ...(type === 'muxSwitch' ? { inPorts: 2, outPorts: 1, controlInterface: 'SEL', disabledPorts: [] } : {}),
             } as PowerNodeData,
         };
         set({ nodes: [...get().nodes, newNode] });
@@ -297,6 +261,7 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     },
 
     removeNode: (id: string) => {
+        get().takeSnapshot();
         set({
             nodes: get().nodes.filter(n => n.id !== id),
             edges: get().edges.filter(e => e.source !== id && e.target !== id),
@@ -304,23 +269,18 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         get().calculateTree();
     },
 
-    /**
-     * Updates specific data fields of a node. 
-     * Handles side-effects like cleaning up stale edges when MuxSwitch ports decrease.
-     */
     updateNodeData: (id: string, data: Partial<PowerNodeData>) => {
+        get().takeSnapshot();
         const nodes = get().nodes;
         const node = nodes.find(n => n.id === id);
         if (!node) return;
 
-        // Special handling for MuxSwitch port reduction
         let edgesToRemove: string[] = [];
         if (node.type === 'muxSwitch' && (data.inPorts !== undefined || data.outPorts !== undefined)) {
             const oldData = node.data as MuxSwitchData;
             const newInPorts = data.inPorts !== undefined ? (data.inPorts as number) : oldData.inPorts;
             const newOutPorts = data.outPorts !== undefined ? (data.outPorts as number) : oldData.outPorts;
 
-            // Remove input edges if inPorts decreased
             if (newInPorts < oldData.inPorts) {
                 get().edges.forEach(edge => {
                     if (edge.target === id && edge.targetHandle?.startsWith('in-')) {
@@ -329,8 +289,6 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
                     }
                 });
             }
-
-            // Remove output edges if outPorts decreased
             if (newOutPorts < oldData.outPorts) {
                 get().edges.forEach(edge => {
                     if (edge.source === id && edge.sourceHandle?.startsWith('out-')) {
@@ -342,9 +300,7 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
         }
 
         if (edgesToRemove.length > 0) {
-            set({
-                edges: get().edges.filter(edge => !edgesToRemove.includes(edge.id))
-            });
+            set({ edges: get().edges.filter(edge => !edgesToRemove.includes(edge.id)) });
         }
 
         set({
@@ -354,23 +310,17 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
     },
 
     removeEdge: (id: string) => {
-        set({
-            edges: get().edges.filter(e => e.id !== id)
-        });
+        get().takeSnapshot();
+        set({ edges: get().edges.filter(e => e.id !== id) });
         get().calculateTree();
     },
 
-    /**
-     * Reorders nodes vertically among structural siblings (nodes sharing the same parent branch).
-     * Crucial to call calculateTree() afterwards to ensure downstream nodes sort accordingly.
-     */
     moveNodeVertical: (id: string, direction: 'up' | 'down') => {
         const { nodes, edges, autoLayout, viewMode } = get();
         const node = nodes.find(n => n.id === id);
         if (!node) return;
 
         if (!autoLayout) {
-            // Manual Mode: Move exactly one row height, swap if occupied
             const { rowHeight } = getLayoutMetrics(viewMode);
             const deltaY = direction === 'up' ? -rowHeight : rowHeight;
             const targetY = node.position.y + deltaY;
@@ -383,446 +333,49 @@ export const usePowerTreeStore = create<PowerTreeState>((set, get) => ({
             );
 
             const newNodes = nodes.map(n => {
-                if (n.id === node.id) {
-                    return { ...n, position: { ...n.position, y: targetY } };
-                }
-                if (occupyingNode && n.id === occupyingNode.id) {
-                    return { ...n, position: { ...n.position, y: node.position.y } };
-                }
+                if (n.id === node.id) return { ...n, position: { ...n.position, y: targetY } };
+                if (occupyingNode && n.id === occupyingNode.id) return { ...n, position: { ...n.position, y: node.position.y } };
                 return n;
             });
-
             set({ nodes: newNodes });
             get().calculateTree();
             return;
         }
 
-        // Auto Layout Mode: Relational sibling sorting
-        // Find structural siblings (nodes sharing the same parent, or all root nodes if no parent)
         const incomingEdges = edges.filter(e => e.target === id && !(e.data as any)?.isCyclic);
         const parentIds = incomingEdges.map(e => e.source);
-
-        let siblings: PowerNode[] = [];
-        if (parentIds.length === 0) {
-            siblings = nodes.filter(n => !edges.some(e => e.target === n.id && !(e.data as any)?.isCyclic));
-        } else {
-            siblings = nodes.filter(n => {
-                const nIncoming = edges.filter(e => e.target === n.id && !(e.data as any)?.isCyclic);
-                return nIncoming.some(e => parentIds.includes(e.source));
-            });
-        }
+        let siblings = parentIds.length === 0 
+            ? nodes.filter(n => !edges.some(e => e.target === n.id && !(e.data as any)?.isCyclic))
+            : nodes.filter(n => edges.filter(e => e.target === n.id && !(e.data as any)?.isCyclic).some(e => parentIds.includes(e.source)));
 
         const sortedSiblings = siblings.sort((a, b) => (a.data.verticalIndex || 0) - (b.data.verticalIndex || 0));
-
         const currentIndex = sortedSiblings.findIndex(n => n.id === id);
         const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
 
         if (targetIndex >= 0 && targetIndex < sortedSiblings.length) {
+            get().takeSnapshot();
             const otherNode = sortedSiblings[targetIndex];
-
-            // Swap vertical indices
             const newNodes = nodes.map(n => {
                 if (n.id === node.id) return { ...n, data: { ...n.data, verticalIndex: otherNode.data.verticalIndex } };
                 if (n.id === otherNode.id) return { ...n, data: { ...n.data, verticalIndex: node.data.verticalIndex } };
                 return n;
             });
-
             set({ nodes: newNodes });
-            // Crucial: Call calculateTree (not just applyLayout) so downstream nodes follow the new sort order!
             get().calculateTree();
         }
     },
 
-    /**
-     * The core Calculation Engine.
-     * Evaluates the entire power tree by establishing directed adjacency graphs.
-     * 1. Evaluates logical depth (level) of each node via BFS from sources.
-     * 2. Propagates voltages downward from sources to loads.
-     * 3. Aggregates current usage backwards from loads up to sources.
-     * 4. Updates vertical Y indices to drive the grid auto-layout grid.
-     */
     calculateTree: () => {
-        const { nodes, edges } = get();
-
-        // --- CYCLE DETECTION & ENGINE ISOLATION ---
-        // We use Depth-First Search (DFS) to identify back-edges which create infinite loops.
-        const cyclicEdgeIds = new Set<string>();
-        const visitState = new Map<string, 0 | 1 | 2>();
-        nodes.forEach(n => visitState.set(n.id, 0));
-
-        const detectCycles = (nodeId: string) => {
-            visitState.set(nodeId, 1); // 1 = currently visiting (in our active path)
-            edges.filter(e => e.source === nodeId).forEach(edge => {
-                const targetId = edge.target;
-                const state = visitState.get(targetId);
-                if (state === 1) {
-                    // Back-edge detected! This edge connects back to an ancestor, creating a cycle.
-                    cyclicEdgeIds.add(edge.id);
-                } else if (state === 0) {
-                    detectCycles(targetId);
-                }
-            });
-            visitState.set(nodeId, 2); // 2 = fully visited
-        };
-
-        // Start DFS from natural roots (nodes with no incoming edges) to map the primary flow
-        nodes.filter(n => !edges.some(e => e.target === n.id)).forEach(r => {
-            if (visitState.get(r.id) === 0) detectCycles(r.id);
-        });
-        // Catch any isolated pure-cycle components that have no natural roots
-        nodes.forEach(n => {
-            if (visitState.get(n.id) === 0) detectCycles(n.id);
-        });
-
-        // Step 1: Build Adjacency Map for Forward (adj) and Reverse (revAdj) lookups
-        const adj = new Map<string, string[]>();
-        const revAdj = new Map<string, string[]>();
-        nodes.forEach(n => { adj.set(n.id, []); revAdj.set(n.id, []); });
-        edges.forEach(e => {
-            if (cyclicEdgeIds.has(e.id)) return; // IGNORE CYCLIC EDGES to guarantee a perfect Directed Acyclic Graph (DAG)
-            if (adj.has(e.source)) adj.get(e.source)!.push(e.target);
-            if (revAdj.has(e.target)) revAdj.get(e.target)!.push(e.source);
-        });
-
-        const newNodes = nodes.map(n => ({
-            ...n,
-            data: { ...n.data, error: undefined as any, calcVoltage: undefined as any, calcCurrent: 0, calcPower: 0, level: 0 } as PowerNodeData
-        }));
-        const nodeMap = new Map(newNodes.map(n => [n.id, n]));
-
-        // Step 2: Assign Levels (Topological Depth via BFS)
-        const roots = newNodes.filter(n => (revAdj.get(n.id) || []).length === 0);
-        const queue: { id: string, level: number }[] = roots.map(r => ({ id: r.id, level: 0 }));
-
-        while (queue.length > 0) {
-            const { id, level } = queue.shift()!;
-            const node = nodeMap.get(id)!;
-            node.data.level = Math.max(node.data.level, level);
-
-            (adj.get(id) || []).forEach(childId => {
-                queue.push({ id: childId, level: node.data.level + 1 });
-            });
-        }
-
-        // All loads should be placed in a dedicated column on the far right
-        let maxNonLoadLevel = 0;
-        newNodes.forEach(n => {
-            if (n.data.type !== 'load') {
-                maxNonLoadLevel = Math.max(maxNonLoadLevel, n.data.level);
-            }
-        });
-        newNodes.forEach(n => {
-            if (n.data.type === 'load') {
-                n.data.level = maxNonLoadLevel + 1;
-            }
-        });
-
-        // Step 3: Voltage Propagation (Forward Topo Sort)
-        // Pushes voltages downstream, applying drops/efficiencies depending on component type.
-        const topoQueue = [...roots.map(r => r.id)];
-        const processedV = new Set<string>();
-        while (topoQueue.length > 0) {
-            const currId = topoQueue.shift()!;
-            if (processedV.has(currId)) continue;
-            processedV.add(currId);
-
-            const curr = nodeMap.get(currId)!;
-            if (curr.data.type === 'powerSource') {
-                curr.data.calcVoltage = curr.data.outVoltage;
-            } else if (curr.data.type === 'converter') {
-                curr.data.calcVoltage = curr.data.outVoltage;
-                const parents = revAdj.get(currId) || [];
-                if (parents.length > 0) {
-                    const inV = nodeMap.get(parents[0])?.data.calcVoltage;
-                    if (inV !== undefined) {
-                        if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0 && inV < curr.data.minInVoltage) {
-                            curr.data.error = `Vin Too Low: ${inV.toFixed(1)}V < ${curr.data.minInVoltage}V`;
-                        } else if (curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0 && inV > curr.data.maxInVoltage) {
-                            curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
-                        } else if (inV < curr.data.outVoltage) {
-                            curr.data.error = `Under-voltage Input: ${inV.toFixed(1)}V < ${curr.data.outVoltage}V`;
-                        }
-                    }
-                }
-            } else if (curr.data.type === 'loadSwitch' || curr.data.type === 'muxSwitch') {
-                const parents = revAdj.get(currId) || [];
-                if (parents.length > 0) {
-                    const inV = nodeMap.get(parents[0])?.data.calcVoltage;
-                    curr.data.calcVoltage = inV; // Will be adjusted by drop later if loadSwitch
-                    if (inV !== undefined && curr.data.type === 'loadSwitch') {
-                        if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0 && inV < curr.data.minInVoltage) {
-                            curr.data.error = `Vin Too Low: ${inV.toFixed(1)}V < ${curr.data.minInVoltage}V`;
-                        } else if (curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0 && inV > curr.data.maxInVoltage) {
-                            curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
-                        }
-                    }
-                }
-            } else if (curr.data.type === 'load') {
-                const parents = revAdj.get(currId) || [];
-                if (parents.length > 0) {
-                    const inV = nodeMap.get(parents[0])?.data.calcVoltage;
-                    curr.data.calcVoltage = inV;
-                    if (inV !== undefined) {
-                        if (curr.data.minInVoltage !== undefined && curr.data.minInVoltage > 0 && inV < curr.data.minInVoltage) {
-                            curr.data.error = `Vin Too Low: ${inV.toFixed(1)}V < ${curr.data.minInVoltage}V`;
-                        } else if (curr.data.maxInVoltage !== undefined && curr.data.maxInVoltage > 0 && inV > curr.data.maxInVoltage) {
-                            curr.data.error = `Vin Too High: ${inV.toFixed(1)}V > ${curr.data.maxInVoltage}V`;
-                        } else if (!curr.data.minInVoltage && !curr.data.maxInVoltage && Math.abs(inV - curr.data.reqVoltage) > 0.1) {
-                            curr.data.error = `Voltage Mismatch: Need ${curr.data.reqVoltage}V, got ${inV.toFixed(1)}V`;
-                        }
-                    }
-                }
-            }
-            (adj.get(currId) || []).forEach(cid => topoQueue.push(cid));
-        }
-
-        // Step 4: Current Aggregation (Backward Topo Sort)
-        // Sums up load demands and propagates required currents upstream to the source.
-        const inDegree = new Map<string, number>();
-        newNodes.forEach(n => inDegree.set(n.id, (adj.get(n.id) || []).length));
-        const backQueue = newNodes.filter(n => (inDegree.get(n.id) || 0) === 0).map(n => n.id);
-
-        while (backQueue.length > 0) {
-            const currId = backQueue.shift()!;
-            const curr = nodeMap.get(currId)!;
-
-            if (curr.data.type === 'load') {
-                curr.data.calcCurrent = curr.data.reqCurrent;
-                curr.data.calcPower = (curr.data.calcVoltage || 0) * curr.data.reqCurrent;
-            } else if (curr.data.type === 'converter') {
-                let outCurrent = 0;
-                (adj.get(currId) || []).forEach(cid => outCurrent += nodeMap.get(cid)!.data.calcCurrent || 0);
-                curr.data.calcCurrent = outCurrent;
-                const outP = curr.data.outVoltage * outCurrent;
-                const inP = outP / (curr.data.efficiency || 1);
-                curr.data.calcPower = inP - outP;
-
-                const parents = revAdj.get(currId) || [];
-                if (parents.length > 0) {
-                    const p = nodeMap.get(parents[0])!;
-                    const pV = p.data.calcVoltage || (p.data as any).outVoltage || 1;
-                    p.data.calcCurrent = (p.data.calcCurrent || 0) + (inP / pV);
-                }
-
-                if (curr.data.maxOutCurrent !== undefined && curr.data.maxOutCurrent > 0 && (curr.data.calcCurrent || 0) > curr.data.maxOutCurrent) {
-                    curr.data.error = `Over-current: ${(curr.data.calcCurrent || 0).toFixed(1)}A > ${curr.data.maxOutCurrent}A`;
-                }
-            } else if (curr.data.type === 'loadSwitch') {
-                let outCurrent = 0;
-                (adj.get(currId) || []).forEach(cid => outCurrent += nodeMap.get(cid)!.data.calcCurrent || 0);
-                curr.data.calcCurrent = outCurrent;
-
-                const rOnOhms = (curr.data.rOn || 0) / 1000;
-                const vDrop = outCurrent * rOnOhms;
-                curr.data.calcPower = outCurrent * outCurrent * rOnOhms;
-
-                if (curr.data.calcVoltage !== undefined) {
-                    curr.data.calcVoltage = Math.max(0, curr.data.calcVoltage - vDrop);
-                }
-
-                const parents = revAdj.get(currId) || [];
-                if (parents.length > 0) {
-                    const p = nodeMap.get(parents[0])!;
-                    p.data.calcCurrent = (p.data.calcCurrent || 0) + outCurrent;
-                }
-
-                if (curr.data.maxCurrent !== undefined && curr.data.maxCurrent > 0 && outCurrent > curr.data.maxCurrent) {
-                    curr.data.error = (curr.data.error ? curr.data.error + ' | ' : '') + `Over-current: ${outCurrent.toFixed(1)}A > ${curr.data.maxCurrent}A`;
-                }
-            } else if (curr.data.type === 'muxSwitch') {
-                let outCurrent = 0;
-                (adj.get(currId) || []).forEach(cid => outCurrent += nodeMap.get(cid)!.data.calcCurrent || 0);
-                curr.data.calcCurrent = outCurrent;
-
-                const parents = revAdj.get(currId) || [];
-                if (parents.length > 0) {
-                    const perParentCurrent = outCurrent / parents.length; // Simplified: distribute load evenly to inputs
-                    parents.forEach(pid => {
-                        const p = nodeMap.get(pid)!;
-                        p.data.calcCurrent = (p.data.calcCurrent || 0) + perParentCurrent;
-                    });
-                }
-            } else if (curr.data.type === 'powerSource') {
-                curr.data.calcPower = curr.data.outVoltage * (curr.data.calcCurrent || 0);
-                if ((curr.data.calcCurrent || 0) > curr.data.maxCurrent) {
-                    curr.data.error = `Over-current: ${curr.data.calcCurrent?.toFixed(1)}A > ${curr.data.maxCurrent}A`;
-                }
-            }
-
-            (revAdj.get(currId) || []).forEach(pid => {
-                inDegree.set(pid, (inDegree.get(pid) || 1) - 1);
-                if (inDegree.get(pid) === 0) backQueue.push(pid);
-            });
-        }
-
-        // Step 5: Update Vertical Indices based on tree structure
-        // This calculates how much vertical height (rows) each branch and sub-branch consumes,
-        // effectively driving the auto-layout engine to pack nodes without overlaps.
-
-        // Reset all vertical indices to undefined initially (so we know what's unassigned)
-        const vIndexMap = new Map<string, number>();
-        let currentNextY = 0; // Tracks the next available row index for independent branches
-
-        // Helper to recursively assign Y and return how much Y space this branch took
-        const assignY = (nodeId: string, startY: number, targetMap: Map<string, number>, globalMap?: Map<string, number>): number => {
-            if (targetMap.has(nodeId) || (globalMap && globalMap.has(nodeId))) return 0; // Already handled (e.g. multi-input)
-
-            const children = adj.get(nodeId) || [];
-
-            // If we have 1 child, we can align it directly with our startY
-            if (children.length <= 1) {
-                targetMap.set(nodeId, startY);
-                let heightConsumed = 1;
-                if (children.length === 1) {
-                    // Dive into child, giving it our exact same startY line
-                    const childConsumed = assignY(children[0], startY, targetMap, globalMap);
-                    heightConsumed = Math.max(1, childConsumed);
-                }
-                return heightConsumed;
-            }
-
-            // We have multiple children. We need to stack them.
-            targetMap.set(nodeId, startY);
-            let childStartY = startY;
-
-            // Sort children to preserve existing manual swapped vertical index relative ordering
-            const sortedChildren = [...children].sort((a, b) => (nodeMap.get(a)!.data.verticalIndex || 0) - (nodeMap.get(b)!.data.verticalIndex || 0));
-
-            for (const childId of sortedChildren) {
-                // If the child already has a Y (because another parent reached it first), skip
-                if (targetMap.has(childId) || (globalMap && globalMap.has(childId))) continue;
-
-                const consumed = assignY(childId, childStartY, targetMap, globalMap);
-                childStartY += consumed; // Next child gets pushed down
-            }
-
-            // The total height consumed by this node's branch is the sum of its children's heights
-            return Math.max(1, childStartY - startY);
-        };
-
-        // First, assign Y positions starting from the roots.
-        // Treating proper power sources as global trees that reserve full row space.
-        const sourceRoots = [...roots]
-            .filter(r => r.data.type === 'powerSource')
-            .sort((a, b) => ((a.data as any).verticalIndex || 0) - ((b.data as any).verticalIndex || 0));
-
-        sourceRoots.forEach(r => {
-            const consumed = assignY(r.id, currentNextY, vIndexMap);
-            currentNextY += consumed;
-        });
-
-        // Any disconnected nodes or isolated subtrees that aren't tied to a main PowerSource
-        // We playfully back-fill them into empty slots at the top (testY = 0, 1...)
-        // by simulating their placement (dry run) and checking for structural grid overlap.
-        const disconnectedNodes = newNodes.filter(n => !vIndexMap.has(n.id))
-            .sort((a, b) => ((a.data as any).verticalIndex || 0) - ((b.data as any).verticalIndex || 0));
-
-        disconnectedNodes.forEach(n => {
-            if (vIndexMap.has(n.id)) return; // Might be processed as a child of another disconnected node
-
-            // Build currently definitively occupied grid matrix: "level,y"
-            const occupiedGrid = new Set<string>();
-            for (const [id, y] of vIndexMap.entries()) {
-                occupiedGrid.add(`${nodeMap.get(id)!.data.level},${y}`);
-            }
-
-            let testY = 0;
-            let success = false;
-
-            while (!success) {
-                const testMap = new Map<string, number>();
-                assignY(n.id, testY, testMap, vIndexMap); // Dry run simulation
-
-                let collision = false;
-                for (const [simId, simY] of testMap.entries()) {
-                    const level = nodeMap.get(simId)!.data.level;
-                    if (occupiedGrid.has(`${level},${simY}`)) {
-                        collision = true;
-                        break;
-                    }
-                }
-
-                if (!collision) {
-                    // Valid placement! Found a sequence of empty grid slots for this floating tree.
-                    // Merge testMap into the definite vIndexMap.
-                    for (const [simId, simY] of testMap.entries()) {
-                        vIndexMap.set(simId, simY);
-                    }
-                    // Update global tracker only if this floating tree hangs below it
-                    let maxTreeY = testY;
-                    for (const y of testMap.values()) maxTreeY = Math.max(maxTreeY, y);
-                    currentNextY = Math.max(currentNextY, maxTreeY + 1);
-
-                    success = true;
-                } else {
-                    testY++; // Try shifting the whole floating tree down by 1 grid cell
-                }
-            }
-        });
-
-        // Apply calculated indices back to node data
-        newNodes.forEach(n => {
-            n.data.verticalIndex = vIndexMap.get(n.id) || 0;
-        });
-
-        // Step 6: Highlight cyclic edges visually (Red line & Animated to warn user)
-        let edgesChanged = false;
-        const newEdgesLayout = edges.map(e => {
-            const isCyclic = cyclicEdgeIds.has(e.id);
-            const currentlyCyclic = !!(e.data as any)?.isCyclic;
-
-            if (isCyclic && !currentlyCyclic) {
-                edgesChanged = true;
-                return {
-                    ...e,
-                    animated: true,
-                    style: { ...e.style, stroke: '#ef4444', strokeWidth: 3 }, // tailwind red-500
-                    data: { ...e.data, isCyclic: true }
-                };
-            } else if (!isCyclic && currentlyCyclic) {
-                edgesChanged = true;
-                const newStyle = { ...e.style } as any;
-                delete newStyle.stroke;
-                delete newStyle.strokeWidth;
-                const newData = { ...e.data } as any;
-                delete newData.isCyclic;
-
-                return {
-                    ...e,
-                    animated: false,
-                    style: Object.keys(newStyle).length > 0 ? newStyle : undefined,
-                    data: newData
-                };
-            }
-            return e;
-        });
-
-        set({ nodes: newNodes });
-        if (edgesChanged) {
-            set({ edges: newEdgesLayout });
-        }
-        get().applyLayout();
+        const { nodes, edges, autoLayout, viewMode } = get();
+        const { updatedNodes, updatedEdges } = calculatePowerTree(nodes, edges);
+        let finalNodes = updatedNodes;
+        if (autoLayout) finalNodes = applyAutoLayout(updatedNodes, viewMode);
+        set({ nodes: finalNodes, edges: updatedEdges });
     },
 
     applyLayout: () => {
         const { nodes, viewMode, autoLayout } = get();
-
-        if (!autoLayout) return; // Skip automatic repositioning if user turned it off
-
-        const { columnWidth, rowHeight } = getLayoutMetrics(viewMode);
-
-        // 5. Final Layout updates
-        const layoutedNodes = nodes.map(node => {
-            const newX = node.data.level * columnWidth;
-            const newY = node.data.verticalIndex * rowHeight;
-            const positionChanged = node.position.x !== newX || node.position.y !== newY;
-
-            return {
-                ...node,
-                position: positionChanged ? { x: newX, y: newY } : node.position
-            };
-        });
-
-        set({ nodes: layoutedNodes });
+        if (!autoLayout) return;
+        set({ nodes: applyAutoLayout(nodes, viewMode) });
     }
 }));

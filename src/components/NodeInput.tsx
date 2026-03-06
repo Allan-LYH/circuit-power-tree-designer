@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { usePowerTreeStore } from '../stores/usePowerTreeStore';
 
 export function NodeInput({
     value,
@@ -12,6 +13,7 @@ export function NodeInput({
     className: string
 }) {
     const [localVal, setLocalVal] = useState(value.toString());
+    const theme = usePowerTreeStore(state => state.theme);
 
     useEffect(() => {
         setLocalVal(value.toString());
@@ -34,7 +36,11 @@ export function NodeInput({
             onKeyDown={handleKeyDown}
             onPointerDown={(e) => e.stopPropagation()}
             step={step}
-            className={`nopan nodrag [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-b border-dashed border-zinc-700 hover:border-zinc-500 rounded-none pb-0.5 min-w-[32px] text-center ${className}`}
+            className={`nopan nodrag [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none border-b border-dashed rounded-none pb-0.5 min-w-[32px] text-center transition-colors ${
+                theme === 'dark' 
+                    ? 'border-zinc-700 hover:border-zinc-500' 
+                    : 'border-zinc-300 hover:border-zinc-400'
+            } ${className}`}
         />
     );
 }

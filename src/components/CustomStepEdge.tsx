@@ -1,6 +1,7 @@
 import { BaseEdge, type EdgeProps, getSmoothStepPath } from '@xyflow/react';
 import { usePowerTreeStore } from '../stores/usePowerTreeStore';
 
+
 export default function CustomStepEdge(props: EdgeProps) {
     const {
         sourceX,
@@ -38,9 +39,12 @@ export default function CustomStepEdge(props: EdgeProps) {
         centerX,
     });
 
+    const theme = usePowerTreeStore(state => state.theme);
+    const defaultColor = theme === 'light' ? '#a1a1aa' : '#3f3f46'; // Zinc-400 or Zinc-700
+
     return (
         <>
-            <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: 2 }} />
+            <BaseEdge path={edgePath} markerEnd={markerEnd} style={{ stroke: defaultColor, ...style, strokeWidth: 2 }} />
         </>
     );
 }
